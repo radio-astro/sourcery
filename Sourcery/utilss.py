@@ -20,6 +20,7 @@ from scipy import stats
 from scipy.interpolate import griddata
 
 
+
 def logger(level=0):
     logging.basicConfig()
 
@@ -32,6 +33,9 @@ def logger(level=0):
     log.setLevel(eval("logging."+LOGL[str(level)]))
 
     return log
+
+
+log = logger(level=0)
 #-----------------------knicked from Stats.py------------------------------- 
 def reshape_data (image):
 
@@ -52,8 +56,9 @@ def reshape_data (image):
     
     pixel_size = abs(hdr['CDELT1'])
 
-    if ndim<2:
-        raise ValueError('The FITS file needs at least two dimensions')
+    if ndim < 2:
+        log.error('The FITS file needs at least two dimensions')
+        
 
  # This is the shape I want the data in
     want = (
@@ -64,9 +69,9 @@ def reshape_data (image):
 )
    
     # Assume RA,DEC is first (FITS) or last two (NUMPY)
-    if ndim>3:
-        for ctype,ind in want[:2]:
-            for axis in range(1,ndim+1):
+    if ndim > 3:
+        for ctype, ind in want[:2]:
+            for axis in range(1, ndim+1):
                 if hdr['CTYPE%d'%axis].startswith(ctype):
                     want[ind].append(ndim-axis)
         if want[0][-1] == want[1][-2] and want[0][-2] == want[1][-1]:
@@ -74,13 +79,13 @@ def reshape_data (image):
             shape[0] = shape[1]
             shape[1] = tmp
             data = numpy.reshape(data,shape)
-    if ndim ==3:
+    if ndim == 3:
         if not hdr['CTYPE3'].startswith('FREQ'):
             data = data[0,...]
-    elif ndim>4:
-        raise ValueError('FITS file has more than 4 axes. Aborting')
+    elif ndim > 4:
+        log.error('FITS file has more than 4 axes. Aborting')
         
-    return data,wcs,hdr,pixel_size
+    return data, wcs, hdr, pixel_size
 
 
 def negative_noise(data):
@@ -107,8 +112,8 @@ def thresh_mask(imagename, outname, thresh, noise=None, sigma=False, smooth=None
     hdr = hdu[0].header
     
     ndim = hdr["NAXIS"] 
-    imslice = [0]*ndim
-    imslice[-2:] = [slice(None)]*2
+    imslice = [0] * ndim
+    imslice[-2:] = [slice(None)] * 2
     data = hdu[0].data[imslice].copy()
 
     # If smooth is not specified, use a fraction of the beam
@@ -118,7 +123,7 @@ def thresh_mask(imagename, outname, thresh, noise=None, sigma=False, smooth=None
     else:
         noise = 1
 
-    thresh = thresh*noise
+    thresh = thresh * noise
     
     mask = numpy.ones(data.shape)
 
@@ -130,19 +135,19 @@ def thresh_mask(imagename, outname, thresh, noise=None, sigma=False, smooth=None
         scales = [.1, .33, .5, 1., 1.5, 2.]#, 4., 8., 16.]
         smooth = None
         for scale in scales: 
-            kk = scale*beam
+            kk = scale * beam
             smooth = filters.gaussian_filter(data if smooth is None else smooth, [kk,kk])
-            mask *= smooth<thresh
+            mask *= smooth < thresh
     else:
-        mask = data<thresh
+        mask = data < thresh
     
     hdu[0].data *= (mask==False)
-    hdu.writeto(outname,clobber=True)
+    hdu.writeto(outname, clobber=True)
 
     return mask==False, noise
 
 
-def sources_extraction(image, output=None, sourcefinder_name='pybdsm', **kw):
+def sources_extraction(image, output=None, sourcefinder_name="pybdsm", **kw):
 
 
     """Runs pybdsm on the specified 'image', converts the 
@@ -150,29 +155,29 @@ def sources_extraction(image, output=None, sourcefinder_name='pybdsm', **kw):
 
     image :  Fits image data
     output : Tigger format, default image name.lsm.html
-           A Catalog name to store the extracted sources
+             A Catalog name to store the extracted sources
     """
     
     ext = fits_ext(image)
-    output = output or image.replace(ext, '.lsm.html')
-    gaul = output+'.gaul'
+    output = output or image.replace(ext, ".lsm.html")
+    gaul = output + ".gaul"
     # start with default PYBDSM options
     opts = {}
     opts.update(kw)
      
-    if sourcefinder_name.lower() == 'pybdsm':
+    if sourcefinder_name.lower() == "pybdsm":
         from lofar import bdsm
-        img = bdsm.process_image(image,group_by_isl=True,**kw)
-        img.write_catalog(outfile=gaul,format='ascii',catalog_type='gaul',clobber=True)
+        img = bdsm.process_image(image, group_by_isl=True, **kw)
+        img.write_catalog(outfile=gaul, format="ascii", catalog_type="gaul", clobber=True)
     verifyGaulModel(gaul)
 
     # converting the model to Tigger
-    tc = ['tigger-convert',gaul,output,"-t","Gaul","-f","--rename",'-o','Tigger']
+    tc = ["tigger-convert", gaul, output,"-t","Gaul","-f","--rename","-o","Tigger"]
 
     process = subprocess.Popen([' '.join(['%s'%item for item in tc])],
-                  stderr=subprocess.PIPE if not isinstance(sys.stderr,
+                  stderr = subprocess.PIPE if not isinstance(sys.stderr,
                         file) else sys.stderr,
-                  stdout=subprocess.PIPE if not isinstance(sys.stdout,
+                  stdout = subprocess.PIPE if not isinstance(sys.stdout,
                         file) else sys.stdout,
                   shell=True)
 
@@ -180,13 +185,13 @@ def sources_extraction(image, output=None, sourcefinder_name='pybdsm', **kw):
         out,err = process.comunicate()
         sys.stdout.write(out)
         sys.stderr.write(err)
-        out = None;
+        out = None
     else:
         process.wait()
     if process.returncode:
-        print 'tigger-convert returns errr code %d'%(process.returncode)
+        log.error("tigger-convert returns errr code %d"%(process.returncode))
     else:
-        print 'DONE: tigger-convert succeeded. catalog is at %s'%output
+        log.info("DONE: tigger-convert succeeded catalog is %s"%output)
 
 
 
@@ -197,17 +202,17 @@ def verifyGaulModel(gaullsm):
   convert. Useful when images are 'all-sky' and have undefined regions.
   """
   falseSources = 0
-  olsm = ''
+  olsm = ""
   names = []
-  fh=open(gaullsm, 'r')
+  fh=open(gaullsm, "r")
   for ll in fh.readlines():
     cll = ' '.join(ll.split())
-    if cll == '' or cll.startswith('#'):
+    if cll == '' or cll.startswith("#"):
       olsm += ll
       if cll.startswith("# Gaus_id"):
         names = cll.split()
       continue
-    lineArray = cll.split(' ')
+    lineArray = cll.split(" ")
     if math.isnan(float(lineArray[names.index("RA")] )) : falseSources += 1
     if float(lineArray[names.index("Peak_flux")]) <= 0 : 
         falseSources+=1
@@ -216,13 +221,14 @@ def verifyGaulModel(gaullsm):
     else: olsm += ll
   fh.close()
 
-  fh=open(gaullsm, 'w')
+  fh=open(gaullsm, "w")
   fh.write(olsm)
   fh.close() 
      
 
 
-#------------------------------------------------------- 
+#----------------------------------------------------
+#knicked from Sofia reliability estimator
 class gaussian_kde_set_covariance(stats.gaussian_kde):
     def __init__(self, dataset, covariance):
         self.covariance = covariance
@@ -270,14 +276,26 @@ def local_variance(imagedata, header, catalog, wcs, pixelsize, tag=None,
     """
 
     data = imagedata
-    beam = header['BMAJ']
+    beam = header["BMAJ"]
 
     bmaj = int(round(beam/pixelsize)) # beam size in pixels
+
+    if not isinstance(local_region, int):
+        if isinstance(local_region, float):
+            local_region = int(round(local_region))
+            log.debug("Float is provided and int is required, converting\
+            to the nearest integer")
+            if local_region == 0:
+                log.error('It rounded off to zero now setting it to one,\
+                change local_region into an integer.')
+        else:
+            log.error("local_region must be an integer. Abort")
     
     step = local_region * bmaj
+
     noise = noise or negative_noise(data)
     
-    model = Tigger.load(catalog, verbose=False)
+    model = Tigger.load(catalog)
     sources = []
 
     if tag: 
@@ -297,38 +315,47 @@ def local_variance(imagedata, header, catalog, wcs, pixelsize, tag=None,
     if ndim == 3:
         data = data[0,...]
  
-    step = [step,step]
+    step = [step, step]
     
-     
+    m = 0 
     for i, (pos, src) in enumerate(zip(positions, sources)):
         x,y = pos
         if x>shape[-2] or y>shape[-1] or numpy.array(pos).any()<0:
             positions.remove(pos)
             model.sources.remove(src)
             sources.remove(src)
+            m += 1
 
         if (y+step[1] > shape[-1]) or (y-step[1] < 0):
             if pos in positions:
                 positions.remove(pos)
                 model.sources.remove(src)
                 sources.remove(src)
+            m += 1
 
         if (x+step[0] > shape[-2]) or (x-step[0] < 0):
             if pos in positions:
                 positions.remove(pos)
                 model.sources.remove(src)
                 sources.remove(src)
+            m += 1
+    if m > 0:
+        log.debug("It will be useful to increase the image size, sources\
+                   with ra+step or dec+step > image size are removed")
+        
     _std = []
     
     if neg_side:
         data = -data
+        log.debug("Using the negative side of the provided image.")
  
     n = 0
-    for (x, y), srs in zip(positions,sources):
+    for (x, y), srs in zip(positions, sources):
         pos = [x,y]
-        subrgn = data[y-step[0]:y+step[0], x-step[1]:x+step[1]]
+        subrgn = data[y-step[0] : y+step[0], x-step[1] : x+step[1]]
         subrgn = subrgn[subrgn > 0]
         std = subrgn.std()
+
         if math.isnan(float(std)) or _std == 0:
             sources.remove(srs)
             model.sources.remove(srs)
@@ -336,10 +363,10 @@ def local_variance(imagedata, header, catalog, wcs, pixelsize, tag=None,
             n += 1
         else:
             _std.append(std)
-            srs.setAttribute('l', std)
+            srs.setAttribute("l", std)
         
     if n > 0:
-        print("Nan encountered %d times. Increase the size of the\
+        log.debug("Nan encountered %d times. Increase the size of the\
                region or check the image. Otherwise sources with 0 or nan\
                are flagged." %n)
 
@@ -348,28 +375,29 @@ def local_variance(imagedata, header, catalog, wcs, pixelsize, tag=None,
                 savefig=savefig, localtag=None):
 
         if savefig:
-            save_fig = catalog.replace('.lsm.html','.png')
+            save_fig = catalog.replace(".lsm.html",".png")
 
         x = numpy.arange(len(pos))
         pylab.figure()
         pylab.plot(x, local_variance)
         pylab.plot([noise] * len(local_variance))
-        localtag = localtag or 'high_variance'    
-        for i,(pos,src) in enumerate(zip( pos, model.sources)):
+
+        localtag = localtag or "high_variance"    
+        for i, (pos, src) in enumerate(zip( pos, model.sources)):
             if _std[i] > threshold:
                 src.setTag(localtag, True)
-                pylab.plot(x[i], local_variance[i], 'rD')
+                pylab.plot(x[i], local_variance[i], "rD")
                 pylab.annotate(src.name, xy=(x[i],local_variance[i]))
         if savefig:
-            pylab.ylabel('local variance')
+            pylab.ylabel("local variance")
             pylab.savefig(save_fig)
     
-
     if highvariance_factor:
         threshold = highvariance_factor * noise
         high_variance_sources(positions, _std, noise, model, threshold=threshold,
                  savefig=savefig, localtag=localvariance_tag)
     model.save(catalog)   
+
     return _std 
 
 
@@ -412,18 +440,35 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs ,
               if False no tagging will be made.
     """
 
-    model = Tigger.load(catalog,verbose=False)
+    model = Tigger.load(catalog)
    
     image_data = imagedata 
-    beam = header['BMAJ']
+    beam = header["BMAJ"]
     psf_data, wcs_psf, psf_hdr, psf_pix = reshape_data(image=psfimage)
     
     shape = image_data.shape
  
     bmaj = int(round(beam/pixelsize))
+    log.info("Beam size is %bmaj"%bmaj)
+
+    if bmaj == 0:
+        log.debug("Beam major axis was read as 0, setting it to 1")
+        bmaj = 1.0
+
+    if not isinstance(corr_region, int):
+        if isinstance(corr_region, float):
+            corr_region = int(round(corr_region))
+            log.debug("Float is provided and int is required, arounding off\
+            to the nearest integer")
+            if corr_region == 0:
+                log.error("Rounding off to 0. Provide an integer. Aborting")
+        else:
+            log.error("corr_region must be an integer. Abort")
+    
     step = corr_region * bmaj
     
     sources = []
+
     if tags: 
         sources = filter(lambda src: src.getTag(tags),model.sources) 
     else:
@@ -431,7 +476,7 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs ,
              sources.append(src)
     
     positions_sky = [map(lambda rad: numpy.rad2deg(rad),
-                    (src.pos.ra,src.pos.dec))  for src in sources]
+                    (src.pos.ra, src.pos.dec))  for src in sources]
     pos = [wcs.wcs2pix(*pos) for pos in positions_sky]
 
     step = [step,step]
@@ -440,43 +485,52 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs ,
         image_data = image_data[0,0,...]
     if ndim == 3:
         image_data = image_data[0,...]
+
     pdim = len(psf_data.shape)
     if pdim == 4:
         psf_data = psf_data[0,0,...]
     if pdim == 3:
         psf_data = psf_data[0,...]
-
-    for i,(p,src) in enumerate(zip(pos,sources)):      
+  
+    
+    m = 0
+    for i, (p, src) in enumerate(zip(pos, sources)):      
         x,y = p
         if x>shape[-2] or y>shape[-1] or numpy.array(p).any()<0:
             pos.remove(p)
             sources.remove(src)
             model.sources.remove(src)
+            m += 1
 
         if (y+step[1] > shape[-1]) or (y-step[1] < 0):
             if p in pos:
                 pos.remove(p)
                 model.sources.remove(src)
                 sources.remove(src)
+            m += 1
         if (x+step[0] > shape[-2]) or (x-step[0] < 0):
             if p in pos:
                 pos.remove(p)
                 model.sources.remove(src)
                 sources.remove(src)
+            m += 1
+    if m > 0:
+        log.debug("It will be useful to increase the image size, sources\
+                   with ra+step or dec+step > image size are removed")
 
-    central = psf_hdr['CRPIX2']
+    central = psf_hdr["CRPIX2"]
     psf_region = psf_data[central-step[0] : central+step[0],
                  central-step[1] : central+step[1]]
     psf_region = psf_region.flatten()
      
     corr = []
     n = 0
-    for src,(ra,dec) in zip(sources,pos): 
+    for src, (ra, dec) in zip(sources, pos): 
         data_region = image_data[dec-step[0] : dec+step[0],
                       ra-step[1] : ra+step[1]].flatten()
         norm_data = (data_region-data_region.min())/(data_region.max()-
                     data_region.min())
-        c_region = numpy.corrcoef((norm_data,psf_region))
+        c_region = numpy.corrcoef((norm_data, psf_region))
         cf_region =  (numpy.diag((numpy.rot90(c_region))**2).sum())**0.5/2**0.5
         cf = cf_region
 
@@ -485,23 +539,25 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs ,
             sources.remove(src)
             n += 1
         else:
-            src.setAttribute('cf',cf)
+            src.setAttribute("cf",cf)
             corr.append(cf)
 
     if n > 0:
-        print('%d sources were removed due to 0 or nan correlation'%n)
+        log.debug("%d sources were removed due to 0 or nan correlation"%n)
 
     thresh = thresh 
-    coefftag = coefftag or 'high_corr'
+    coefftag = coefftag or "high_corr"
     if do_high:
-        for src,crr in zip(sources,corr):
+        for src, crr in zip(sources, corr):
             if crr > thresh:
-               src.setTag(coefftag,True)
+               src.setTag(coefftag, True)
     model.save(catalog)     
+
     return corr
 
+
 def plot(pos, neg, rel=None, labels=None, show=False, savefig=None):
-    #info('Making Reliability plots')
+    log.info('Making Reliability plots')
  
     # labels for projections
     plots = []
@@ -517,7 +573,7 @@ def plot(pos, neg, rel=None, labels=None, show=False, savefig=None):
     pylab.figure(figsize=(10*nplanes, 8*nplanes))
 
     if nneg < 5:
-        print 'Warn here' ##TODO        
+        log.error("Few number of detections cant proceed plotting. Aborting")        
         return 
 
     if nplanes %2.0 == 0:
@@ -533,31 +589,31 @@ def plot(pos, neg, rel=None, labels=None, show=False, savefig=None):
 
     for counter, (i, j, x, y) in enumerate(plots):
 
-        pylab.subplot( int(row), int(column), counter+1)
+        pylab.subplot(int(row), int(column), counter+1)
         a,b = neg[:, i], neg[:, j]
         c,d = pos[:, i], pos[:, j]
 
-        kernel = numpy.array([a.std(),b.std()])
-        cov = numpy.array([(kernel[0]**2,0.0),(0.0,kernel[1]**2)])
-        ncov = gaussian_kde_set_covariance(numpy.array([a,b]),cov)
+        kernel = numpy.array([a.std(), b.std()])
+        cov = numpy.array([(kernel[0]**2, 0.0),(0.0, kernel[1]**2)])
+        ncov = gaussian_kde_set_covariance(numpy.array([a, b]), cov)
         
         # define axis limits for plots
-        ac = numpy.concatenate((a,c))        
-        bd = numpy.concatenate((b,d))        
+        ac = numpy.concatenate((a, c))        
+        bd = numpy.concatenate((b, d))        
         pylab.xlim(ac.min(), ac.max()*1.2)
         pylab.ylim(bd.min(), bd.max()*1.2)
 
         #negative detection density field
-        PN = ncov(numpy.array([a,b])) * nneg
+        PN = ncov(numpy.array([a, b])) * nneg
        
         xi = numpy.linspace(ac.min() ,ac.max(), 100)
         yi = numpy.linspace(bd.min(), bd.max(), 100)
-        zzz = griddata((a,b),PN,(xi[None,:],yi[:,None]),method='cubic')
+        zzz = griddata((a, b), PN,(xi[None,:], yi[:,None]), method="cubic")
 
-        pylab.contour(xi,yi,zzz,20,linewidths=4) 
-        pylab.scatter(pos[:,i],pos[:,j],marker='o',c=rel,s=40)
-        pylab.xlabel(labels[x][1],fontsize='35')
-        pylab.ylabel(labels[y][1],fontsize='35')
+        pylab.contour(xi, yi, zzz, 20, linewidths=4) 
+        pylab.scatter(pos[:,i], pos[:,j], marker="o", c=rel, s=40)
+        pylab.xlabel(labels[x][1], fontsize="35")
+        pylab.ylabel(labels[y][1], fontsize="35")
         pylab.grid()
 
     if savefig : 
