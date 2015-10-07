@@ -54,27 +54,27 @@ def reshape_data (image):
         shape = list(data.shape)
         ndim = len(shape)
 
-    wcs = WCS(hdr, mode='pyfits')
+    wcs = WCS(hdr, mode="pyfits")
     
-    pixel_size = abs(hdr['CDELT1'])
+    pixel_size = abs(hdr["CDELT1"])
 
     if ndim < 2:
-        log.error('The FITS file needs at least two dimensions')
+        log.error("The FITS file needs at least two dimensions")
         
 
  # This is the shape I want the data in
     want = (
-            ['STOKES',0],
-            ['FREQ',1],
-            ['RA',2],
-            ['DEC',3],
+            ["STOKES",0],
+            ["FREQ",1],
+            ["RA",2],
+            ["DEC",3],
 )
    
     # Assume RA,DEC is first (FITS) or last two (NUMPY)
     if ndim > 3:
         for ctype, ind in want[:2]:
             for axis in range(1, ndim+1):
-                if hdr['CTYPE%d'%axis].startswith(ctype):
+                if hdr["CTYPE%d"%axis].startswith(ctype):
                     want[ind].append(ndim-axis)
         if want[0][-1] == want[1][-2] and want[0][-2] == want[1][-1]:
             tmp = shape[0]
@@ -82,10 +82,10 @@ def reshape_data (image):
             shape[1] = tmp
             data = numpy.reshape(data,shape)
     if ndim == 3:
-        if not hdr['CTYPE3'].startswith('FREQ'):
+        if not hdr["CTYPE3"].startswith("FREQ"):
             data = data[0,...]
     elif ndim > 4:
-        log.error('FITS file has more than 4 axes. Aborting')
+        log.error("FITS file has more than 4 axes. Aborting")
         
     return data, wcs, hdr, pixel_size
 
@@ -103,7 +103,7 @@ def negative_noise(data):
 def invert_image(image, data, header):
     
     ext = fits_ext(image)
-    output = image.replace(ext,'_negative.fits')
+    output = image.replace(ext,"_negative.fits")
     newdata = -data
     pyfits.writeto(output, newdata, header, clobber=True)
 
@@ -179,7 +179,7 @@ def sources_extraction(image, output=None, sourcefinder_name="pybdsm", **kw):
     # converting the model to Tigger
     tc = ["tigger-convert", gaul, output,"-t","Gaul","-f","--rename","-o","Tigger"]
 
-    process = subprocess.Popen([' '.join(['%s'%item for item in tc])],
+    process = subprocess.Popen([" ".join(["%s"%item for item in tc])],
                   stderr = subprocess.PIPE if not isinstance(sys.stderr,
                         file) else sys.stderr,
                   stdout = subprocess.PIPE if not isinstance(sys.stdout,
@@ -203,9 +203,11 @@ def sources_extraction(image, output=None, sourcefinder_name="pybdsm", **kw):
 #---------------------------------------------------------------------------------------
 #knicked from pyxis lsm.pybdsm_search
 def verifyGaulModel(gaullsm):
+
   """Check all sources in a gaul file are in valid locations before running tigger
   convert. Useful when images are 'all-sky' and have undefined regions.
   """
+
   falseSources = 0
   olsm = ""
   names = []
@@ -562,7 +564,8 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs ,
 
 
 def plot(pos, neg, rel=None, labels=None, show=False, savefig=None):
-    log.info('Making Reliability plots')
+
+    log.info("Making Reliability plots")
  
     # labels for projections
     plots = []
@@ -622,8 +625,7 @@ def plot(pos, neg, rel=None, labels=None, show=False, savefig=None):
         pylab.grid()
 
     if savefig : 
+        log.info("Saving the reliability plot.")
         pylab.savefig(savefig)
-    if show : 
-        pylab.show()
-    pylab.clf()
+    
 
