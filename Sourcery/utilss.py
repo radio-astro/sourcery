@@ -36,6 +36,8 @@ def logger(level=0):
 
 
 log = logger(level=0)
+
+
 #-----------------------knicked from Stats.py------------------------------- 
 def reshape_data (image):
 
@@ -96,6 +98,7 @@ def negative_noise(data):
     noise = numpy.concatenate([negative,-negative]).std()
 
     return noise
+
 
 def invert_image(image, data, header):
     
