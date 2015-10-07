@@ -254,8 +254,8 @@ def fits_ext(fitsname):
 
 def local_variance(imagedata, header, catalog, wcs, pixelsize, tag=None,
                    local_region=5, noise=None, savefig=True, 
-                   highvariance_factor=0.8, localvariance_tag=None,
-                   neg_side=False):
+                   highvariance_factor=0.8, high_local_tag='high_variance',
+                   neg_side=False, do_alltag=True, do_high_loc=False):
 
     """ Calculates the local varience (lv) around a source on 
         one side of interest. 
@@ -276,10 +276,17 @@ def local_variance(imagedata, header, catalog, wcs, pixelsize, tag=None,
               If highvariance_factor=0.8 is given this means that
               the sources with local variance greater than  
               0.8*image_noise will be tagged 'high_variance' if
-              localvariance_tag=None.
-        localvariance_tag : str, optional. A default tag 'high_variance'
+              high_local_tag=None.
+        high_local_tag : str, optional. A default tag 'high_variance'
               A tag provided to sources of high variance as
-              determined by high_variance factor. 
+              determined by high_variance factor.
+        do_alltag :  bool, optional. Default is True.
+              If True all sources are given an extra
+              parameter with 'l' which is not optional.
+        do_high_loc : bool, optional. Default is False.
+              If True sources with high local variance will be tagged
+              using 'localvariance_tag' (see above).
+
     """
 
     data = imagedata
@@ -305,7 +312,9 @@ def local_variance(imagedata, header, catalog, wcs, pixelsize, tag=None,
     model = Tigger.load(catalog)
     sources = []
 
-    if tag: 
+    if tag:
+        log.debug("Local variance is only computed for sources with a tag %s are"%
+        tag)
         sources = filter(lambda src: src.getTag(tag), model.sources) 
     else:
         for src in model.sources:
@@ -370,7 +379,8 @@ def local_variance(imagedata, header, catalog, wcs, pixelsize, tag=None,
             n += 1
         else:
             _std.append(std)
-            srs.setAttribute("l", std)
+            if do_alltag:
+                srs.setAttribute("l", std)
         
     if n > 0:
         log.debug("Nan encountered %d times. Increase the size of the\
@@ -389,7 +399,7 @@ def local_variance(imagedata, header, catalog, wcs, pixelsize, tag=None,
         pylab.plot(x, local_variance)
         pylab.plot([noise] * len(local_variance))
 
-        localtag = localtag or "high_variance"    
+        localtag = localtag     
         for i, (pos, src) in enumerate(zip( pos, model.sources)):
             if _std[i] > threshold:
                 src.setTag(localtag, True)
@@ -399,10 +409,10 @@ def local_variance(imagedata, header, catalog, wcs, pixelsize, tag=None,
             pylab.ylabel("local variance")
             pylab.savefig(save_fig)
     
-    if highvariance_factor:
+    if do_high_loc:
         threshold = highvariance_factor * noise
         high_variance_sources(positions, _std, noise, model, threshold=threshold,
-                 savefig=savefig, localtag=localvariance_tag)
+                 savefig=savefig, localtag=high_local_tag)
     model.save(catalog)   
 
     return _std 
@@ -410,7 +420,7 @@ def local_variance(imagedata, header, catalog, wcs, pixelsize, tag=None,
 
 def psf_image_correlation(catalog, psfimage, imagedata, header, wcs ,
                      pixelsize, corr_region=5, thresh=0.4, tags=None,
-                     coefftag=None, do_high=False):
+                     coefftag='high_corr', do_alltag=True, do_high=False):
 
 
     """ Computes correlation between the image and PSF image
@@ -436,12 +446,15 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs ,
               Gives a correlation threshold i.e those sources
               with correlation > thresh will be tagged as high
               correlation sources using a tag 'high_corr' if coefftag=None.
-        tags: str, optional. 
+        tags: str, optional. Default is None. 
               If tag is provided then sources which has the specified tag will be
               correlated with the psf.
         coefftag: str, optional. A Default string is 'high_corr'.
               If provided sources with correlation > thresh will be tagged
-              using the user specified tag. 
+              using the user specified tag.
+        do_alltag : bool, optional. Default is True.
+              If True all sources will be tagged with 'cf'
+              giving each a correlation with PSF parameter.
         do_high: bool, optional.  
               If True, sources of high correlation are tagged using 'coefftag',
               if False no tagging will be made.
@@ -476,7 +489,8 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs ,
     
     sources = []
 
-    if tags: 
+    if tags:
+        log.debug('Only sources with tag %s will be correlated with the PSF'%tags)
         sources = filter(lambda src: src.getTag(tags),model.sources) 
     else:
          for src in model.sources:
@@ -546,14 +560,16 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs ,
             sources.remove(src)
             n += 1
         else:
-            src.setAttribute("cf",cf)
             corr.append(cf)
+
+            if do_alltag:
+                src.setAttribute("cf",cf)
 
     if n > 0:
         log.debug("%d sources were removed due to 0 or nan correlation"%n)
 
     thresh = thresh 
-    coefftag = coefftag or "high_corr"
+    coefftag = coefftag
     if do_high:
         for src, crr in zip(sources, corr):
             if crr > thresh:
