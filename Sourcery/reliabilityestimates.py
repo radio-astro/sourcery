@@ -1,14 +1,11 @@
-# Reliability estimates 
+# Reliability estimation script
 # Lerato Sebokolodi <mll.sebokolodi@gmail.com>
 
 
-#from Sourcery import utilss
 
 import matplotlib
 matplotlib.use('Agg')
 import utilss
-from scipy import stats
-from scipy.interpolate import griddata
 import numpy 
 import tempfile
 import Tigger 
@@ -62,10 +59,12 @@ class compute(object):
                  This smoothens the positive side on a Fits data in order to
                  make faint artefact and source peaks to be significant.
                  With large values implying more smoothing. 
-            neg_smooth : float between 0 and 1, optional. Default 0.6.
+            neg_smooth : float between 0 and 1, optional. Default 0.8.
                  This smoothens the negative side on a Fits data in order to
                  make faint artefact peaks to be significant over noise peaks.
-            loglevel :  
+            loglevel :  int, optional. Default is 0.
+                 Provides logging options, 0 is info, 1 debug, 2 error and 3 
+                 critial.
             neg_thresh_isl : float, optional. Default is 3. 
                  This sets source finder island threshold for the negative pixels
                  in an image.
@@ -78,7 +77,7 @@ class compute(object):
         """
 
         self.outdir = outdir or os.path.join("Sourcery"+datetime.datetime.now().\
-                                strftime("%Y-%m-%d-%H-%M"))
+                                strftime("%Y-%m-%d-%H-%M-%S"))
 
         self.directory = os.mkdir(self.outdir)
          
@@ -94,15 +93,15 @@ class compute(object):
                                 utilss.reshape_data(self.imagename)
 
         if not self.psfname:
-            self.log.info('No psf provided setting do_psf_corr to False.')
+            self.log.info("No psf provided setting do_psf_corr to False.")
             self.do_psf_corr = False
      
  
         self.noise = utilss.negative_noise(self.imagedata)
         
         self.log.info("The negative noise is %e"%self.noise)
-        if self.noise == 0: #TODO doesnt stop 
-            self.log.error('The negative noise is 0, check image')
+        if self.noise == 0: 
+            self.log.debug("The negative noise is 0, check image")
 
         self.sourcefinder_name  = sourcefinder_name
         self.log.info("Using %s source finder to extract sources."%
@@ -132,8 +131,8 @@ class compute(object):
         self.opts_neg = {}
         self.neg_thresh_isl = neg_thresh_isl
         self.neg_thresh_pix = neg_thresh_pix
-        self.opts_neg['thresh_isl'] = self.neg_thresh_isl
-        self.opts_neg['thresh_pix'] = self.neg_thresh_pix
+        self.opts_neg["thresh_isl"] = self.neg_thresh_isl
+        self.opts_neg["thresh_pix"] = self.neg_thresh_pix
 
     def source_finder(self, image=None, thresh=None, noise=None, **kw):
         
@@ -163,13 +162,13 @@ class compute(object):
    
         model = Tigger.load(catalog)
         sources = model.sources
-
+        
         if rm_sources:
             for i in range(len(rm_sources)):
-                ra, dec, tolerance = rm_sources[i].split(',')
-                ra, dec, tolerance = map(numpy.deg2rad,(float(ra),
+                ra, dec, tolerance = rm_sources[i].split(",")
+                ra, dec, tolerance = map(numpy.deg2rad, (float(ra),
                     float(dec), float(tolerance)))
-                within = model.getSourcesNear(ra,dec,tolerance)   
+                within = model.getSourcesNear(ra, dec, tolerance)   
                 for src in sorted(sources):
                     if src in within:
                          sources.remove(src)
@@ -177,9 +176,9 @@ class compute(object):
     
     def params(self, sources, do_coef=None, do_local_variance=None):
 
-        labels = dict(size=(0, 'Log$_{10}$(Source area)'), 
-                 peak=(1, 'Log$_{10}$( Peak flux [Jy] )'), 
-                 tot=(2, 'Log$_{10}$( Total flux [Jy] )'))
+        labels = dict(size=(0, "Log$_{10}$(Source area)"), 
+                 peak=(1, "Log$_{10}$( Peak flux [Jy] )"), 
+                 tot=(2, "Log$_{10}$( Total flux [Jy] )"))
                      
         nsrc = len(sources)
         if do_coef:
@@ -187,23 +186,23 @@ class compute(object):
                   "Log$_{10}$ (CF)")})
         if do_local_variance:
             labels.update( {"local": (len(labels),
-                 'Log$_{10}$(Local Variance)')})
+                 "Log$_{10}$(Local Variance)")})
         
         out = numpy.zeros([nsrc, len(labels)])
 
-        for i,src in enumerate(sources):
+        for i, src in enumerate(sources):
             # get source extent in arcsec
             try:
-               ex = numpy.rad2deg(src.get_attr("_pybdsm_Maj"))*3600 
+               ex = numpy.rad2deg(src.get_attr("_pybdsm_Maj")) * 3600 
             except AttributeError:
-                ex = bmaj*3600
-            ex = ex or bmaj*3600
+                ex = bmaj * 3600
+            ex = ex or bmaj * 3600
             try:
-                ey = numpy.rad2deg(src.get_attr("_pybdsm_Min"))*3600 
+                ey = numpy.rad2deg(src.get_attr("_pybdsm_Min")) * 3600 
             except AttributeError:
-                ey = bmin*3600
-            ey = ey or bmin*3600
-            area = ex*ey*math.pi
+                ey = bmin * 3600
+            ey = ey or bmin * 3600
+            area = ex * ey * math.pi
 
             if do_local_variance:
                 local_variance = src.l
@@ -266,9 +265,9 @@ class compute(object):
         npsrc = len(posSources)
         nnsrc = len(negSources)      
  
-        positive, labels = self.params(posSources,do_coef=self.do_psf_corr,
+        positive, labels = self.params(posSources, do_coef=self.do_psf_corr,
                           do_local_variance=self.do_local_var)
-        negative, labels = self.params(negSources,do_coef=self.do_psf_corr,
+        negative, labels = self.params(negSources, do_coef=self.do_psf_corr,
                           do_local_variance=self.do_local_var)
         # setting up a kernel, Gaussian kernel
         bandwidth = []
@@ -280,8 +279,8 @@ class compute(object):
 
         for i in range(nplanes):
             for j in range(nplanes):
-                if i==j:
-                    cov[i,j] = bandwidth[i]*(4.0/((nplanes+2)*
+                if i == j:
+                    cov[i, j] = bandwidth[i]*(4.0/((nplanes+2)*
                                npsrc))**(1.0/(nplanes+4.0))
         
         pcov = utilss.gaussian_kde_set_covariance(positive.T, cov)
@@ -294,15 +293,16 @@ class compute(object):
         # define reliability of positive catalog
         rel = (nps-nns)/nps
     
-        for src,rf in zip(posSources,rel):
-            src.setAttribute('rel',rf)
+        for src, rf in zip(posSources, rel):
+            src.setAttribute("rel", rf)
             out_lsm = pos_catalog
         pmodel.save(out_lsm)
+
         if self.makeplots:
-        
-            savefig = out_lsm.replace('.lsm.html','_rel.png')
+            savefig = out_lsm.replace(".lsm.html","_rel.png")
             utilss.plot(positive, negative, rel=rel, labels=labels,
-                       savefig=savefig)   
+                       savefig=savefig)
+        self.log.info(">>>> Finding a reliable value of the reliability <<<<")
         # setting up the reliability threshold
         # get number densities
         nnps = pcov(negative.T) * npsrc
@@ -310,5 +310,5 @@ class compute(object):
      
         nrel = (nnps-nnns)/nnps
         reliable = nrel.max()
-        self.log.info('Reliable sources have reliability > %.3f'%reliable)
+        self.log.info("Reliable sources have reliability > %.3f"%reliable)
 
