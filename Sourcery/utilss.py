@@ -94,6 +94,7 @@ def negative_noise(data):
 
     negative = data[data<0].flatten()
     noise = numpy.concatenate([negative,-negative]).std()
+
     return noise
 
 def invert_image(image, data, header):
@@ -102,6 +103,7 @@ def invert_image(image, data, header):
     output = image.replace(ext,'_negative.fits')
     newdata = -data
     pyfits.writeto(output, newdata, header, clobber=True)
+
     return output
 
 
@@ -283,11 +285,11 @@ def local_variance(imagedata, header, catalog, wcs, pixelsize, tag=None,
     if not isinstance(local_region, int):
         if isinstance(local_region, float):
             local_region = int(round(local_region))
-            log.debug("Float is provided and int is required, converting\
+            log.debug("Float is provided and int is required, arounding off\
             to the nearest integer")
             if local_region == 0:
-                log.error('It rounded off to zero now setting it to one,\
-                change local_region into an integer.')
+                log.error('It rounded off to zero now,\
+                change local_region into an integer. Aborting')
         else:
             log.error("local_region must be an integer. Abort")
     
