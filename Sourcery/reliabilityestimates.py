@@ -20,7 +20,7 @@ class compute(object):
     def __init__(self, imagename, psfname=None, sourcefinder_name='pybdsm',
                  makeplots=True, do_psf_corr=True, do_local_var=True,
                  psf_corr_region=2, local_var_region=10, local_negside=True, 
-                 rm_sources_region=None, pos_smooth=0.8, neg_smooth=0.8,
+                 rm_sources_region=None, pos_smooth=1.6, neg_smooth=1.6,
                  loglevel=0, neg_thresh_isl=3, neg_thresh_pix=5, 
                  outdir=None, **kw):
 

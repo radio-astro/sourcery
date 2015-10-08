@@ -20,6 +20,7 @@ from scipy import stats
 from scipy.interpolate import griddata
 
 
+matplotlib.rcParams.update({'font.size': 18})
 
 def logger(level=0):
     logging.basicConfig()
@@ -469,7 +470,7 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs ,
     shape = image_data.shape
  
     bmaj = int(round(beam/pixelsize))
-    log.info("Beam size is %bmaj"%bmaj)
+    log.info("Beam major= %d degrees"%bmaj)
 
     if bmaj == 0:
         log.debug("Beam major axis was read as 0, setting it to 1")
