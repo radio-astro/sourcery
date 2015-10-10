@@ -23,7 +23,9 @@ from scipy.interpolate import griddata
 matplotlib.rcParams.update({'font.size': 18})
 
 def logger(level=0):
-    logging.basicConfig()
+    
+    name = "logfile.log"
+    logging.basicConfig(filename=name)
 
     LOGL = {"0": "INFO",
             "1": "DEBUG",
@@ -43,10 +45,11 @@ log = logger(level=0)
 def reshape_data (image):
 
     """ Reshape FITS data to (stokes,freq,npix_ra,npix_dec).
-        Returns reshaped data, wcs, the image header,
-        and pixel size 
+
+    Returns reshaped data, wcs, the image header, and
+    pixel size.
          
-        image: Fits data  
+    image: Fits data  
     """
 
     with pyfits.open(image) as hdu:
@@ -101,17 +104,18 @@ def negative_noise(data):
     return noise
 
 
-def invert_image(image, data, header):
+def invert_image(image, data, header, prefix=None):
     
     ext = fits_ext(image)
-    output = image.replace(ext,"_negative.fits")
+    output = prefix + "_negatives.fits" or image.replace(ext,"_negative.fits")
     newdata = -data
     pyfits.writeto(output, newdata, header, clobber=True)
 
     return output
 
 
-def thresh_mask(imagename, outname, thresh, noise=None, sigma=False, smooth=None):
+def thresh_mask(imagename, outname, thresh, 
+                noise=None, sigma=False, smooth=None):
     """ Create a threshhold mask """
 
     hdu = pyfits.open(imagename)
@@ -142,7 +146,9 @@ def thresh_mask(imagename, outname, thresh, noise=None, sigma=False, smooth=None
         smooth = None
         for scale in scales: 
             kk = scale * beam
-            smooth = filters.gaussian_filter(data if smooth is None else smooth, [kk,kk])
+            smooth = filters.gaussian_filter(
+                       data if smooth is None else 
+                       smooth, [kk,kk])
             mask *= smooth < thresh
     else:
         mask = data < thresh
@@ -153,7 +159,9 @@ def thresh_mask(imagename, outname, thresh, noise=None, sigma=False, smooth=None
     return mask==False, noise
 
 
-def sources_extraction(image, output=None, sourcefinder_name="pybdsm", **kw):
+def sources_extraction(image, output=None,
+                       sourcefinder_name="pybdsm",
+                       **kw):
 
 
     """Runs pybdsm on the specified 'image', converts the 
@@ -161,7 +169,7 @@ def sources_extraction(image, output=None, sourcefinder_name="pybdsm", **kw):
 
     image :  Fits image data
     output : Tigger format, default image name.lsm.html
-             A Catalog name to store the extracted sources
+        A Catalog name to store the extracted sources
     """
     
     ext = fits_ext(image)
@@ -174,11 +182,13 @@ def sources_extraction(image, output=None, sourcefinder_name="pybdsm", **kw):
     if sourcefinder_name.lower() == "pybdsm":
         from lofar import bdsm
         img = bdsm.process_image(image, group_by_isl=True, **kw)
-        img.write_catalog(outfile=gaul, format="ascii", catalog_type="gaul", clobber=True)
+        img.write_catalog(outfile=gaul, format="ascii", 
+                          catalog_type="gaul", clobber=True)
     verifyGaulModel(gaul)
 
     # converting the model to Tigger
-    tc = ["tigger-convert", gaul, output,"-t","Gaul","-f","--rename","-o","Tigger"]
+    tc = ["tigger-convert", gaul, output,
+          "-t","Gaul","-f","--rename","-o","Tigger"]
 
     process = subprocess.Popen([" ".join(["%s"%item for item in tc])],
                   stderr = subprocess.PIPE if not isinstance(sys.stderr,
@@ -195,7 +205,8 @@ def sources_extraction(image, output=None, sourcefinder_name="pybdsm", **kw):
     else:
         process.wait()
     if process.returncode:
-        log.error("tigger-convert returns errr code %d"%(process.returncode))
+        log.error("tigger-convert returns errr code %d"%
+                 (process.returncode))
     else:
         log.info("DONE: tigger-convert succeeded catalog is %s"%output)
 
@@ -205,7 +216,9 @@ def sources_extraction(image, output=None, sourcefinder_name="pybdsm", **kw):
 #knicked from pyxis lsm.pybdsm_search
 def verifyGaulModel(gaullsm):
 
-  """Check all sources in a gaul file are in valid locations before running tigger
+  """Check all sources in a gaul file are in valid locations
+     before running tigger.
+
   convert. Useful when images are 'all-sky' and have undefined regions.
   """
 
@@ -221,7 +234,8 @@ def verifyGaulModel(gaullsm):
         names = cll.split()
       continue
     lineArray = cll.split(" ")
-    if math.isnan(float(lineArray[names.index("RA")] )) : falseSources += 1
+    if math.isnan(float(lineArray[names.index("RA")] )) : 
+        falseSources += 1
     if float(lineArray[names.index("Peak_flux")]) <= 0 : 
         falseSources+=1
     if float(lineArray[names.index("Total_flux")]) <= 0 :
@@ -244,7 +258,8 @@ class gaussian_kde_set_covariance(stats.gaussian_kde):
     def _compute_covariance(self):
         #if numpy.linalg.det(self.covariance) != 0:
         self.inv_cov = pylab.linalg.inv(self.covariance)
-        self._norm_factor = numpy.sqrt(pylab.linalg.det(2*numpy.pi*self.covariance)) * self.n
+        self._norm_factor = numpy.sqrt(
+             pylab.linalg.det(2*numpy.pi*self.covariance)) * self.n
 #---------------------------------------------------------------------------
 
 
@@ -253,56 +268,80 @@ def fits_ext(fitsname):
     return ext
 
 
-def local_variance(imagedata, header, catalog, wcs, pixelsize, tag=None,
-                   local_region=5, noise=None, savefig=True, 
-                   highvariance_factor=0.8, high_local_tag='high_variance',
-                   neg_side=False, do_alltag=True, do_high_loc=False):
+def local_variance(imagedata, header, catalog, wcs=None,
+                   pixelsize=None, tag=None,local_region=5,
+                   noise=None, savefig=True, highvariance_factor=0.8,
+                   high_local_tag=None, neg_side=False, 
+                   setatr=True, do_high_loc=False, prefix=None):
 
     """ Calculates the local varience (lv) around a source on 
         one side of interest. 
  
-        imagedata : Reshaped Fits data
-        header : Image header
-        catalog : Source catalog, in Tigger format.
-             Source model to compute local variance around.
-        tag : str, optional.
-              if specified then the local variance will be
-              computed for only a subset of sources with a tag,
-              e.g., 'tag=snr'.
-        local_region: int, optional. A default value of 5. 
-              Gives a region to compute the local variance in
-              psf sizes, e.g, 'local_region = 2',
-              then a region (= 2 * beam size) around a source is used.
-        highvariance_factor: float, optional. A default value of 0.8. 
-              If highvariance_factor=0.8 is given this means that
-              the sources with local variance greater than  
-              0.8*image_noise will be tagged 'high_variance' if
-              high_local_tag=None.
-        high_local_tag : str, optional. A default tag 'high_variance'
-              A tag provided to sources of high variance as
-              determined by high_variance factor.
-        do_alltag :  bool, optional. Default is True.
-              If True all sources are given an extra
-              parameter with 'l' which is not optional.
-        do_high_loc : bool, optional. Default is False.
-              If True sources with high local variance will be tagged
-              using 'localvariance_tag' (see above).
+    imagedata : Reshaped Fits data
+    header : Image header
+    catalog : Source catalog, in Tigger format.
+        Source model to compute local variance around.
 
+    tag : str, optional.
+        if specified then the local variance will be
+        computed for only a subset of sources with a tag,
+        e.g., 'tag=snr'.
+    header : Fits header e.g., img=pyfits.open("test.fits")
+        header=img[0].header
+    wcs :This class provides methods
+        for accessing information from the World  Coordinate System
+        (WCS) contained in the header of a FITS image. Conversions 
+        between pixel and WCS coordinates can also be performed.
+        If not provided it is directly obtained from the Fits header
+        provided.
+    pixelsize: float, Default is None.
+         If not provided then it is directly obtained form a Fits header.
+    local_region: int, optional. A default value of 5. 
+        Gives a region to compute the local variance in
+        psf sizes, e.g, 'local_region = 2',
+        then a region (= 2 * beam size) around a source is used.
+
+    highvariance_factor: float, optional. A default value of 0.8. 
+        If highvariance_factor=0.8 is given this means that
+        the sources with local variance greater than  
+        0.8*image_noise will be tagged 'high_var' if
+        high_local_tag=None.
+
+    high_local_tag : str, optional. A default tag None.
+        Tag assigned to sources of high local variance.
+        If None is provided the default tag will be used
+        i.e 'high_var'. Else it uses the specified tag.
+
+    setatr : bool, optional. Default is True.
+        If True all sources will be tagged with 'l'
+        giving each detection an extra local variance
+        parameter.
+
+    do_high_loc : bool, optional. Default is False.
+        If True sources with high local variance will be tagged
+        using 'localvariance_tag' (see above).
+    prefix :  str, optional. Default is None.
     """
 
     data = imagedata
     beam = header["BMAJ"]
+
+    if pixelsize is None:
+        pixelsize = abs(header["CDELT1"])
+    if wcs is None:
+        wcs = WCS(header, mode="pyfits")
 
     bmaj = int(round(beam/pixelsize)) # beam size in pixels
 
     if not isinstance(local_region, int):
         if isinstance(local_region, float):
             local_region = int(round(local_region))
-            log.debug("Float is provided and int is required, arounding off\
-            to the nearest integer")
+            log.debug("Float is provided and int is required,"
+                       "arounding offto the nearest integer")
             if local_region == 0:
-                log.error('It rounded off to zero now,\
-                change local_region into an integer. Aborting')
+                log.error("It rounded off to zero now,"
+                          "change local_region into an integer."
+                          "Aborting")
         else:
             log.error("local_region must be an integer. Abort")
     
@@ -314,14 +353,15 @@ def local_variance(imagedata, header, catalog, wcs, pixelsize, tag=None,
     sources = []
 
     if tag:
-        log.debug("Local variance is only computed for sources with a tag %s are"%
-        tag)
+        log.debug("Local variance is only computed"
+                  "for sources with a tag %s are"%
+                   tag)
         sources = filter(lambda src: src.getTag(tag), model.sources) 
     else:
         for src in model.sources:
             sources.append(src)
     
-    positions_sky = [map(lambda rad: numpy.rad2deg(rad),\
+    positions_sky = [map(lambda rad: numpy.rad2deg(rad),
                     (src.pos.ra,src.pos.dec)) for src in sources]
     positions = [wcs.wcs2pix(*pos) for pos in positions_sky]
 
@@ -357,8 +397,9 @@ def local_variance(imagedata, header, catalog, wcs, pixelsize, tag=None,
                 sources.remove(src)
             m += 1
     if m > 0:
-        log.debug("It will be useful to increase the image size, sources\
-                   with ra+step or dec+step > image size are removed")
+        log.debug("It will be useful to increase the image size,"
+                  "sources with ra+step or dec+step > image size"
+                  "are removed")
         
     _std = []
     
@@ -380,20 +421,22 @@ def local_variance(imagedata, header, catalog, wcs, pixelsize, tag=None,
             n += 1
         else:
             _std.append(std)
-            if do_alltag:
+            if setatr:
                 srs.setAttribute("l", std)
         
     if n > 0:
-        log.debug("Nan encountered %d times. Increase the size of the\
-               region or check the image. Otherwise sources with 0 or nan\
-               are flagged." %n)
+        log.debug("Nan encountered %d times. Increase the size of the"
+                  "region or check the image. Otherwise sources with"
+                  "0 or nan are flagged." %n)
 
 
-    def high_variance_sources(pos, local_variance, noise, model, threshold,
-                savefig=savefig, localtag=None):
+    def high_variance_sources(
+            pos, local_variance, noise, model, threshold,
+            savefig=savefig, prefix=None, localtag=None):
 
         if savefig:
-            save_fig = catalog.replace(".lsm.html",".png")
+            save_fig = prefix + "_variance.png" or catalog.replace(
+                                                      ".lsm.html", ".png")
 
         x = numpy.arange(len(pos))
         pylab.figure()
@@ -409,56 +452,55 @@ def local_variance(imagedata, header, catalog, wcs, pixelsize, tag=None,
         if savefig:
             pylab.ylabel("local variance")
             pylab.savefig(save_fig)
-    
+
+    if high_local_tag is None:
+         high_local_tag = "high_var"
     if do_high_loc:
         threshold = highvariance_factor * noise
-        high_variance_sources(positions, _std, noise, model, threshold=threshold,
-                 savefig=savefig, localtag=high_local_tag)
+        high_variance_sources(positions, _std, noise, model,
+                              threshold=threshold, savefig=savefig,
+                              prefix=prefix, localtag=high_local_tag)
     model.save(catalog)   
 
     return _std 
 
 
-def psf_image_correlation(catalog, psfimage, imagedata, header, wcs ,
-                     pixelsize, corr_region=5, thresh=0.4, tags=None,
-                     coefftag='high_corr', do_alltag=True, do_high=False):
+def psf_image_correlation(catalog, psfimage, imagedata, header, wcs=None ,
+                     pixelsize=None, corr_region=5, thresh=0.4, tags=None,
+                     coefftag='high_corr', setatr=True, do_high=False):
 
 
-    """ Computes correlation between the image and PSF image
+    """ Computes correlation of the image and PSF image
 
-        catalog : Source model, Tigger format.
-        psfimage : Instrument's Point spread functions Fits data.
-        imagedata : Fits data
-        header : Fits header e.g., img=pyfits.open("test.fits")
-              header=img[0].header
-        wcs : Obtained from Fit header e.g.,
-              wcs = WCS(header,mode='pyfits') where WCS is imported as
-              'from astLib.astWCS import WCS'.
-              This class provides methods for accessing information from the World
-              Coordinate System (WCS) contained in the header of a FITS image.
-              Conversions between pixel and WCS coordinates can also be performed.
-        pixelsize: float, obtained in degrees from Fits header e.g 
-              header['BMAJ'], where BMAJ is beam major axis.
-        corr_region : int, optional. A default value of 5.
-              corr_region sets a region in Fits data and psf data to be correlated, e.g.,
-              for a default value this implies that a region = 5* beam size 
-              will be correlated. 
-        thresh : float, optional. A default value of 0.4. 
-              Gives a correlation threshold i.e those sources
-              with correlation > thresh will be tagged as high
-              correlation sources using a tag 'high_corr' if coefftag=None.
-        tags: str, optional. Default is None. 
-              If tag is provided then sources which has the specified tag will be
-              correlated with the psf.
-        coefftag: str, optional. A Default string is 'high_corr'.
-              If provided sources with correlation > thresh will be tagged
-              using the user specified tag.
-        do_alltag : bool, optional. Default is True.
-              If True all sources will be tagged with 'cf'
-              giving each a correlation with PSF parameter.
-        do_high: bool, optional.  
-              If True, sources of high correlation are tagged using 'coefftag',
-              if False no tagging will be made.
+    catalog : Source model, Tigger format.
+    psfimage : Instrument's Point spread functions Fits data.
+    imagedata : Fits data
+    header : Fits header e.g., img=pyfits.open("test.fits")
+        header=img[0].header
+    wcs :This class provides methods
+        for accessing information from the World  Coordinate System
+        (WCS) contained in the header of a FITS image. Conversions 
+        between pixel and WCS coordinates can also be performed.
+        If not provided it is directly obtained from the Fits header
+        provided.
+    pixelsize: float, Default is None.
+         If not provided then it is directly obtained form a Fits header.
+    corr_region : int, optional. A default value of 5.
+        The size of the region to correlate given in beam sizes.
+    thresh : float, optional. A default value of 0.4. 
+        Correlation threshold. Sources with correlation > threshold
+        are sources with high correlation.
+    tags: str, optional. Default is None.
+        If specified only sources with 'Tag' will be evaluated.
+    coefftag: str, optional. A Default string is 'high_corr'.
+        If provided sources with correlation > thresh will be tagged
+        using the user specified tag.
+    setatr : bool, optional. Default is True.
+        If True all sources will be tagged with 'cf'
+        giving each detection an extra correlation with PSF parameter.
+    do_high: bool, optional.  Default is False.
+        If True, sources of high correlation are tagged using 'coefftag',
+        if False no tagging will be made.
     """
 
     model = Tigger.load(catalog)
@@ -468,7 +510,12 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs ,
     psf_data, wcs_psf, psf_hdr, psf_pix = reshape_data(image=psfimage)
     
     shape = image_data.shape
- 
+
+    if pixelsize is None:
+        pixelsize = abs(header["CDELT1"])
+    if wcs is None:
+        wcs = WCS(header, mode="pyfits")
+
     bmaj = int(round(beam/pixelsize))
     log.info("Beam major= %d degrees"%bmaj)
 
@@ -479,10 +526,11 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs ,
     if not isinstance(corr_region, int):
         if isinstance(corr_region, float):
             corr_region = int(round(corr_region))
-            log.debug("Float is provided and int is required, arounding off\
-            to the nearest integer")
+            log.debug("Float is provided and int is required,"
+                      "arounding off to the nearest integer")
             if corr_region == 0:
-                log.error("Rounding off to 0. Provide an integer. Aborting")
+                log.error("Rounding off to 0. Provide an integer."
+                          "Aborting")
         else:
             log.error("corr_region must be an integer. Abort")
     
@@ -491,7 +539,8 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs ,
     sources = []
 
     if tags:
-        log.debug('Only sources with tag %s will be correlated with the PSF'%tags)
+        log.debug("Only sources with tag %s will be correlated"
+                  "with the PSF"%tags)
         sources = filter(lambda src: src.getTag(tags),model.sources) 
     else:
          for src in model.sources:
@@ -537,8 +586,9 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs ,
                 sources.remove(src)
             m += 1
     if m > 0:
-        log.debug("It will be useful to increase the image size, sources\
-                   with ra+step or dec+step > image size are removed")
+        log.debug("It will be useful to increase the image size,"
+                  "sources with ra+step or dec+step > image size"
+                  "are removed")
 
     central = psf_hdr["CRPIX2"]
     psf_region = psf_data[central-step[0] : central+step[0],
@@ -549,11 +599,12 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs ,
     n = 0
     for src, (ra, dec) in zip(sources, pos): 
         data_region = image_data[dec-step[0] : dec+step[0],
-                      ra-step[1] : ra+step[1]].flatten()
+                                ra-step[1] : ra+step[1]].flatten()
         norm_data = (data_region-data_region.min())/(data_region.max()-
-                    data_region.min())
+                                                     data_region.min())
         c_region = numpy.corrcoef((norm_data, psf_region))
-        cf_region =  (numpy.diag((numpy.rot90(c_region))**2).sum())**0.5/2**0.5
+        cf_region =  (numpy.diag((numpy.rot90(c_region))**2)
+                                  .sum())**0.5/2**0.5
         cf = cf_region
 
         if math.isnan(float(cf)) or cf == 0:
@@ -563,11 +614,11 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs ,
         else:
             corr.append(cf)
 
-            if do_alltag:
+            if setatr:
                 src.setAttribute("cf",cf)
 
     if n > 0:
-        log.debug("%d sources were removed due to 0 or nan correlation"%n)
+        log.debug("%d sources were removed due to 0/nan correlation"%n)
 
     thresh = thresh 
     coefftag = coefftag
@@ -598,7 +649,8 @@ def plot(pos, neg, rel=None, labels=None, show=False, savefig=None):
     pylab.figure(figsize=(10*nplanes, 8*nplanes))
 
     if nneg < 5:
-        log.error("Few number of detections cant proceed plotting. Aborting")        
+        log.error("Few number of detections cant proceed plotting."
+                  "Aborting")        
         return 
 
     if nplanes %2.0 == 0:
