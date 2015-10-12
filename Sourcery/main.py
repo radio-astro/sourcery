@@ -25,13 +25,13 @@ def main():
     add("-v","--version", action="version",version=
         "{:s} version {:s}".format(parser.prog, __version__))
    
-    add("-i", "--image",
+    add("-i", dest="image",
         help="FITS image name")
 
-    add("-p", "--psf", default=None,
+    add("-p", dest="psf", default=None,
         help="Point Spread Function (PSF) Fits image name. Default=None")
 
-    add("-s", "--source_finder", default="pybdsm",
+    add("-s", dest="source_finder", default="pybdsm",
         help="Source finder name. Current available"
         " sourcefinders: pybdsm. Default='pybdsm'")
 
@@ -39,93 +39,93 @@ def main():
            help="PyBDSM process_image options" 
            " [may be specified multiple times]. E.g thresh_pix=1 etc.")
 
-    add("-log", "--log_level", type=int, default=0,
+    add("-log", dest="log_level", type=int, default=0,
         help="Python logging module. This ranges between"
         " 0-3, where 0, 1, 3, 4 are for info, debug, error and " 
         " critical respectively. Default is 0")
 
-    add("-pref", "--prefix", default=None, 
+    add("-pref", dest="prefix", default=None, 
         help="Give a prefix to an output directory. Default is None")
 
-    add("-apsf", "--add_psfcorr", action="store_true", default=False,
+    add("-apsf", dest="add_psfcorr", action="store_true", default=False,
         help="Do and add correlation of the sources with the PSF as "
         " an extra source parameter for reliability estimations.  The psf"
         " name must be provided. Default is False. To set true add -apsf")
 
-    add("-alv", "--add_locvar", action="store_true", default=False,
+    add("-alv", dest="add_locvar", action="store_true", default=False,
         help=" Include local variance as an extra source parameter."
         " See -apsf. Similar to -apsf.")
 
-    add("-dmp", "--do_relplots", action="store_false", default=True,
+    add("-dmp", dest="do_relplots", action="store_false", default=True,
         help="Make reliability density plot. Default is True."
         " To disable add -dmp on the command line.")
  
-    add("-pcr", "--psfcorr_region", type=int, default=5, 
+    add("-pcr", dest="psfcorr_region", type=int, default=5, 
         help="Data size to correlate, given in beam sizes."
         " Default is 5 beam sizes.")
   
-    add("-lr", "--local_region", default=10,
+    add("-lr", dest="local_region", default=10,
         help="Data size to compute the local variance, in beam sizes."
         " Default is 10 beam sizes.")
      
-    add("-rel_rm", "--rel_src_excl", action="append", default=None,
+    add("-rel_rm", dest="rel_src_excl", action="append", default=None,
         help="Remove sources in a given region to exclude in reliability"
         " estimations. E.g ra, dec, radius (in degrees). For more than"
         " one region: ra1,dec1,radius1:ra2,dec2,radius2. Default is None.")
 
-    add("-ps", "--pos_smooth", type=float, default=1.6, 
+    add("-ps", dest="pos_smooth", type=float, default=1.6, 
         help="Data smoothing to eliminate noise/data peaks given by -ps * noise."
         " This is for positive side of an Fits image. Default is 1.6.")
 
-    add("-ns", "--neg_smooth", type=float, default=0.8, 
+    add("-ns", dest="neg_smooth", type=float, default=0.8, 
         help="This is similar to -ps above but for negative side"
         "of an image. Default is 0.8.")
 
-    add('-pisl', "--thresh_isl", type=float, default=3,
+    add('-pisl', dest="thresh_isl", type=float, default=3,
         help="Threshold for the island boundary in number of sigma above"
         " the mean. Determines extent of island used for fitting [pybdsm]."
         " For positive pixels. Default is 3.")
 
-    add("-ppix", "--thresh_pix", type=float, default=5,
+    add("-ppix", dest="thresh_pix", type=float, default=5,
         help="Source detection threshold: threshold for the island peak"
         " in number of sigma above the mean. For positive pixels."
         " Default is 5.")
  
-    add("-nisl", "--neg_thresh_isl", type=float, default=3,
+    add("-nisl", dest="neg_thresh_isl", type=float, default=3,
         help="Similar to -pisl but applied to the negative pixels."
         " Default is 3.")
 
-    add("-npix", "--neg_thresh_pix", type=float, default=5,
+    add("-npix", dest="neg_thresh_pix", type=float, default=5,
         help="Similar to -ppix but applied for negative pixels."
         " Default is 5.")
 
-    add("-snr_thr", "--snr_thresh", type=float, default=80,
+    add("-snr_thr", dest="snr_thresh", type=float, default=80,
         help="Signal-to-noise threshold with reference to the minimum"
         " source flux in an image, e.g 80* min(snr), sources with"
         " snr > than this are referred to high SNR sources."
         " Default is 80.")
 
-    add("-loc_thr", "--locvar_thresh", type=float, default=0.9,
+    add("-loc_thr", dest="locvar_thresh", type=float, default=0.9,
         help="Local variance threshold. For -loc-thr of 0.9 means that"
         " sources with local variance > 0.9 * negative noise"
         " are considered sources of high local variance."
         " Default is 0.9")
 
-    add("-pc_thr", "--psfcorr_thresh", type=float, default=0.5,
+    add("-pc_thr", dest="psfcorr_thresh", type=float, default=0.5,
         help="Correlation factor threshold. Sources with threshold"
         " larger than the specified are considered sources of"
         " high correlation. Default is 0.5.")    
 
-    add("-nneg", "--num_negatives", type=float, default=8,
+    add("-nneg", dest="num_negatives", type=float, default=8,
         help="Number of negative detections around a given source."
         " If N > threshold then sources will be considered as requiring"
         " direction-dependent calibratio solutions. Default is 8.")
 
-    add("-nrgn", "--neg_region", type=float, default=10,
+    add("-nrgn", dest="neg_region", type=float, default=10,
         help="The size of a region around a sources to lookup for"
         " negatives. In Beams in sizes. Default is 10.") 
 
-    add("-nphrm", "--phase_center_rm", type=float, default=None,
+    add("-nphrm", deset="phase_center_rm", type=float, default=None,
         help="The radius from the phase center not to consider for"
         " final direction-dependent source selection. In beam sizes."
         " Default is None.")
