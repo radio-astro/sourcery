@@ -16,8 +16,7 @@
        "thresh_isl" : 2,
        "thresh_pix" : 4,
        "neg_thresh_isl" : 1,
-       "neg_thresh_pix" : 2,
-       "prefix" : "Test"
+       "neg_thresh_pix" : 2
     },
     "dd_tagging" : {
         "imagename" : "kat7restored.fits",
@@ -30,7 +29,6 @@
          "negdetec_region" : 10,
          "negatives_thresh" : 8,
          "phasecenter_excl_radius" : null,
-         "prefix" : "Test",
          "loglevel" : 0
     },
     "source_finder_opts": {

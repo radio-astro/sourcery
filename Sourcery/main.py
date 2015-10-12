@@ -210,6 +210,7 @@ def main():
                 reldict[key] = str(val)
         
         z = reldict.copy()
+        z.update({"prefix" : prefix})
         z.update(sourcefin)
         mc = rel.compute(**z)
         pos, neg = mc.get_reliability()
@@ -219,7 +220,7 @@ def main():
                 ddict[key] = str(val)
 
         x = ddict.copy()
-        y = {"poscatalog" : pos, "negcatalog" : neg}
+        y = {"poscatalog" : pos, "negcatalog" : neg, "prefix" : prefix}
         x.update(y)
         dc = dd.Parent(**x)
         ppos, nneg = dc.source_selection()
