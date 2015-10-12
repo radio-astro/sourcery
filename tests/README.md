@@ -1,6 +1,6 @@
 # Testing
 
-On a command line:
+###On a command line:
 > sourcery -i kat7restored.fits -p kat7psf.fits -pref "Test" -nisl=1 -npix=1
 
 ### Output Files 
