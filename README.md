@@ -19,7 +19,7 @@ python setup.py install --record sourcery_files.txt
 ## Unistall
 ### Pip
 ```
-pip uninstall stackem
+pip uninstall sourcery
 ```
 
 ### Direct build
