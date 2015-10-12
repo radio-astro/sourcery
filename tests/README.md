@@ -5,6 +5,6 @@
 
 ### Output Files 
 
-1. A directory named 'Test_datenow'.  
+1. A directory named 'Test_datenow' where datenow specfifies the date and hour at which you run the test.
    Inside this diretory is Two PNG files and Two Source catalogues in Tigger format (name.lsm.html)
 2. A log file named 'logfile.log' which contains any relevant information which might be useful to a user.
