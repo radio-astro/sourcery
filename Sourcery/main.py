@@ -1,5 +1,5 @@
 # Reliability estimation and direction-dependent source selection
-
+## Lerato Sebokolodi <mll.sebokolodi@gmail.com>
 
 import sys
 from argparse import ArgumentParser
@@ -9,10 +9,16 @@ import os
 import datetime
 import json
 
-def main():
 
-    __version_info__ = (0,0,1)
-    __version__ = ".".join( map(str,__version_info__) )
+
+
+# set simms directory
+_path = os.path.realpath(__file__)
+_path = os.path.dirname(_path)
+execfile("%s/__init__.py"%_path)
+
+
+def main():
 
     for i, arg in enumerate(sys.argv):
         if (arg[0] == '-') and arg[1].isdigit(): sys.argv[i] = ' ' + arg
@@ -138,8 +144,7 @@ def main():
     args = parser.parse_args()
     
     # image and psf image
-    img = args.image
-    psf = args.psf
+
 
     #source finder
     sf = args.source_finder
@@ -169,7 +174,7 @@ def main():
 
     # making outdirectory
     if args.prefix is None:
-        prefix = os.path.basename(args.image).split(".")[:-1]
+        prefix = os.path.basename(args.image.split(",")[0]).split(".")[:-1]
         prefix = ".".join(prefix)
     else:
         prefix = args.prefix
@@ -209,41 +214,75 @@ def main():
             if isinstance(val, unicode):
                 reldict[key] = str(val)
         
-        z = reldict.copy()
-        z.update({"prefix" : prefix})
-        z.update(sourcefin)
-        mc = rel.compute(**z)
-        pos, neg = mc.get_reliability()
-
         for key, val in ddict.iteritems():
             if isinstance(val, unicode):
                 ddict[key] = str(val)
 
-        x = ddict.copy()
-        y = {"poscatalog" : pos, "negcatalog" : neg, "prefix" : prefix}
-        x.update(y)
-        dc = dd.Parent(**x)
-        ppos, nneg = dc.source_selection()
+        z = reldict.copy()
+        z.update({"prefix" : prefix})
+        z.update(sourcefin)
+
+        if args.imagename:
+            images = args.image.split(",")
+            psfs = args.psf.split(",")
+
+            for i, (image, psf) in enumerate(zip(images, psfs)):
+                if len(images) >1:
+                    prefix = prefix + "-%04d"%i
+
+                mc = rel.compute(image, psf, **z)
+                pos, neg = mc.get_reliability()
+
+                ddict["poscatalog"] = pos
+                ddict["negcatalog"] = neg
+                ddict["prefix"] = prefix
+
+                dc = dd.Parent(image, psf, **ddict)
+                ppos, nneg = dc.source_selection()
+
+        else:
+
+            image = jdict["imagename"]
+            psf = jdict["psfname"]
+            mc = rel.compute(image, psf, **z)
+            pos, neg = mc.get_reliability()
+
+            ddict["poscatalog"] = pos
+            ddict["negcatalog"] = neg
+            ddict["prefix"] = prefix
+
+            dc = dd.Parent(image, psf, **ddict)
+            ppos, nneg = dc.source_selection()
         
     else:
-        # reliability     
-        mc  = rel.compute(imagename=img, psfname=psf, sourcefinder_name=sf,
-                 makeplots=mkplt, do_psf_corr=dopsf, do_local_var=doloc,
-                 psf_corr_region=psfregion, local_var_region=locregion, 
-                 rel_excl_src=rel_rmsrc, pos_smooth=psmth,
-                 neg_smooth=nsmth, loglevel=log, thresh_isl=pthr_isl,
-                 thresh_pix=pthr_pix, neg_thresh_isl=nthresh_isl,
-                 neg_thresh_pix=nthresh_pix, prefix=prefix, **pybdsm_opts)
+        # reliability
+        images = args.image.split(",")
+        psfs = args.psf.split(",")
+        if len(images) != len(psfs):
+            psfs = [psfs[0]]*len(images)
 
-        # assignign reliability values
-        pos, neg = mc.get_reliability()
+        for i, (image, psf) in enumerate(zip(images, psfs)):
 
-        # direction dependent detection tagging
-        dc = dd.Parent(imagename=img, psfname=psf, poscatalog=pos, negcatalog=neg,
-                   snr_thresh=sthr, local_thresh=lthr, local_region=locregion, 
-                   psfcorr_region=psfregion, high_corr_thresh=pcthr,
-                   negdetec_region=negregion, negatives_thresh=negthr,
-                   phasecenter_excl_radius=phase_remove, prefix=prefix,
-                   loglevel=log)
-        # tagging
-        ppose, nneg = dc.source_selection()
+            if len(images) >1:
+                prefix = prefix + "-%04d"%i
+
+            mc  = rel.compute(imagename=image, psfname=psf, sourcefinder_name=sf,
+                     makeplots=mkplt, do_psf_corr=dopsf, do_local_var=doloc,
+                     psf_corr_region=psfregion, local_var_region=locregion, 
+                     rel_excl_src=rel_rmsrc, pos_smooth=psmth,
+                     neg_smooth=nsmth, loglevel=log, thresh_isl=pthr_isl,
+                     thresh_pix=pthr_pix, neg_thresh_isl=nthresh_isl,
+                     neg_thresh_pix=nthresh_pix, prefix=prefix, **pybdsm_opts)
+
+            # assignign reliability values
+            pos, neg = mc.get_reliability()
+
+            # direction dependent detection tagging
+            dc = dd.Parent(imagename=image, psfname=psf, poscatalog=pos, negcatalog=neg,
+                       snr_thresh=sthr, local_thresh=lthr, local_region=locregion, 
+                       psfcorr_region=psfregion, high_corr_thresh=pcthr,
+                       negdetec_region=negregion, negatives_thresh=negthr,
+                       phasecenter_excl_radius=phase_remove, prefix=prefix,
+                       loglevel=log)
+            # tagging
+            ppose, nneg = dc.source_selection()
