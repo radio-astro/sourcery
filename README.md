@@ -6,7 +6,7 @@ It also provides a tool for selecting sources responsible for artifacts in an im
 
 ### Pip
 ```
-psudo pip install sourcery
+sudo pip install sourcery
 ```
 
 ### Direct build
