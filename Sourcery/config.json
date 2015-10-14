@@ -1,8 +1,7 @@
-{ 
+{
+    "imagename": "<input FITS image>",
+    "psfname" : null,
     "reliability" : {
-    
-       "imagename": "kat7restored.fits",
-       "psfname" : "kat7psf.fits",
        "sourcefinder_name" : "pybdsm",
        "makeplots" : true,
        "do_psf_corr" : false,
@@ -19,8 +18,7 @@
        "neg_thresh_pix" : 2
     },
     "dd_tagging" : {
-        "imagename" : "kat7restored.fits",
-         "psfname" : "kat7psf.fits",
+         "enable": true,
          "snr_thresh" : 80,
          "local_thresh" : 0.9,
          "local_region" : 10,
@@ -32,9 +30,7 @@
          "loglevel" : 0
     },
     "source_finder_opts": {
-    
+
 
     }
 }
-
-

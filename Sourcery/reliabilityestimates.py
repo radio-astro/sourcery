@@ -5,7 +5,7 @@
 
 import matplotlib
 matplotlib.use('Agg')
-import utilss
+import utils
 import numpy 
 import tempfile
 import Tigger 
@@ -14,7 +14,7 @@ import pylab
 import os
 import math
 
-class compute(object):
+class load(object):
 
 
     def __init__(self, imagename, psfname=None, sourcefinder_name='pybdsm',
@@ -79,7 +79,7 @@ class compute(object):
 
         # log level  
         self.loglevel = loglevel
-        self.log = utilss.logger(self.loglevel)
+        self.log = utils.logger(self.loglevel)
        
         # image, psf image
         self.imagename = imagename
@@ -88,14 +88,14 @@ class compute(object):
 
         # reading imagename data
         self.imagedata, self.wcs, self.header, self.pixelsize =\
-            utilss.reshape_data(self.imagename)
+            utils.reshape_data(self.imagename)
 
         if not self.psfname:
             self.log.info("No psf provided, do_psf_corr = False.")
             self.do_psf_corr = False
      
         # computing negative noise
-        self.noise = utilss.negative_noise(self.imagedata)
+        self.noise = utils.negative_noise(self.imagedata)
         
         self.log.info("The negative noise is %e"%self.noise)
 
@@ -114,7 +114,7 @@ class compute(object):
 
 
         # making negative image
-        self.negativeimage = utilss.invert_image(
+        self.negativeimage = utils.invert_image(
                                self.imagename, self.imagedata,
                                self.header, self.prefix)
 
@@ -155,23 +155,23 @@ class compute(object):
         thresh = thresh or self.pos_smooth
         image = image or self.imagename
 
-        ext = utilss.fits_ext(image)
+        ext = utils.fits_ext(image)
         tpos = tempfile.NamedTemporaryFile(suffix="."+ext, dir=".")
         tpos.flush()
         
         # data smoothing
-        mask, noise = utilss.thresh_mask(
+        mask, noise = utils.thresh_mask(
                           image, tpos.name,
                           thresh=thresh, noise=self.noise, 
                           sigma=True, smooth=True)
 
         lsmname = lsmname or self.poslsm
         # source extraction
-        utilss.sources_extraction(
+        utils.sources_extraction(
              image=tpos.name, output=lsmname, 
              sourcefinder_name=self.sourcefinder_name, 
              blank_limit=self.noise/100.0, **kw)
-        
+
 
     def remove_sources_within(self, catalog, rel_excl_src=None):
    
@@ -256,13 +256,13 @@ class compute(object):
 
         # add local variance as a parameter
         if self.do_local_var:
-            utilss.local_variance(self.imagedata, self.header, 
+            utils.local_variance(self.imagedata, self.header, 
                               catalog=self.poslsm, wcs=self.wcs, 
                               pixelsize=self.pixelsize, local_region=
                               self.local_var_region, savefig=False,
                               highvariance_factor=None, neg_side=True)
 
-            utilss.local_variance(self.imagedata, self.header,
+            utils.local_variance(self.imagedata, self.header,
                               catalog=self.neglsm, wcs=self.wcs,
                               pixelsize=self.pixelsize, local_region=
                               self.local_var_region, savefig=False,
@@ -270,12 +270,12 @@ class compute(object):
         # compute correlation if only do_psf_corr = True 
         #and the psf is provided 
         if self.do_psf_corr and self.psfname:
-            utilss.psf_image_correlation(
+            utils.psf_image_correlation(
                  catalog=self.poslsm, psfimage=self.psfname,
                  imagedata=self.imagedata, header=self.header,
                  wcs=self.wcs, pixelsize=self.pixelsize,
                  corr_region=self.psf_corr_region)
-            utilss.psf_image_correlation(
+            utils.psf_image_correlation(
                  catalog=self.neglsm, psfimage=self.psfname, 
                  imagedata=self.imagedata, header=self.header,
                  wcs=self.wcs, pixelsize=self.pixelsize, 
@@ -308,8 +308,8 @@ class compute(object):
                     cov[i, j] = bandwidth[i]*(4.0/((nplanes+2)*
                                    npsrc))**(1.0/(nplanes+4.0))
         
-        pcov = utilss.gaussian_kde_set_covariance(positive.T, cov)
-        ncov = utilss.gaussian_kde_set_covariance(negative.T, cov)
+        pcov = utils.gaussian_kde_set_covariance(positive.T, cov)
+        ncov = utils.gaussian_kde_set_covariance(negative.T, cov)
     
         # get number densities
         nps = pcov(positive.T) * npsrc
@@ -325,7 +325,7 @@ class compute(object):
 
         if self.makeplots:
             savefig = self.prefix + "_planes.png"
-            utilss.plot(positive, negative, rel=rel, labels=labels,
+            utils.plot(positive, negative, rel=rel, labels=labels,
                         savefig=savefig)
 
         # setting up the reliability threshold

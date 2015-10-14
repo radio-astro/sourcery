@@ -20,7 +20,7 @@ from scipy import stats
 from scipy.interpolate import griddata
 
 
-matplotlib.rcParams.update({'font.size': 18})
+matplotlib.rcParams.update({'font.size': 12})
 
 def logger(level=0):
     
@@ -438,19 +438,20 @@ def local_variance(imagedata, header, catalog, wcs=None,
             save_fig = prefix + "_variance.png" or catalog.replace(
                                                       ".lsm.html", ".png")
 
+        local = [l/1.0e-6 for l in local_variance]
         x = numpy.arange(len(pos))
         pylab.figure()
-        pylab.plot(x, local_variance)
-        pylab.plot([noise] * len(local_variance))
+        pylab.plot(x, local)
+        pylab.plot([noise/1.0e-6] * len(local_variance))
 
         localtag = localtag     
         for i, (pos, src) in enumerate(zip( pos, model.sources)):
             if _std[i] > threshold:
                 src.setTag(localtag, True)
-                pylab.plot(x[i], local_variance[i], "rD")
-                pylab.annotate(src.name, xy=(x[i],local_variance[i]))
+                pylab.plot(x[i], local[i], "rD")
+                pylab.annotate(src.name, xy=(x[i],local[i]))
         if savefig:
-            pylab.ylabel("local variance")
+            pylab.ylabel("local variance[$\mu$]")
             pylab.savefig(save_fig)
 
     if high_local_tag is None:
@@ -646,7 +647,7 @@ def plot(pos, neg, rel=None, labels=None, show=False, savefig=None):
 
     
     npos, nneg = len(pos), len(neg)
-    pylab.figure(figsize=(10*nplanes, 8*nplanes))
+    pylab.figure(figsize=(14*nplanes, 8*nplanes))
 
     if nneg < 5:
         log.error("Few number of detections cant proceed plotting."
@@ -686,7 +687,8 @@ def plot(pos, neg, rel=None, labels=None, show=False, savefig=None):
         xi = numpy.linspace(ac.min() ,ac.max(), 100)
         yi = numpy.linspace(bd.min(), bd.max(), 100)
         zzz = griddata((a, b), PN,(xi[None,:], yi[:,None]), method="cubic")
-
+        pylab.tick_params(axis='x', labelsize=30)
+        pylab.tick_params(axis='y', labelsize=30)
         pylab.contour(xi, yi, zzz, 20, linewidths=4) 
         pylab.scatter(pos[:,i], pos[:,j], marker="o", c=rel, s=40)
         pylab.xlabel(labels[x][1], fontsize="35")

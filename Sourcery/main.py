@@ -71,7 +71,7 @@ def main():
         " Default is 5 beam sizes.")
   
     add("-lr", "--local-region", dest="local_region", default=10,
-        help="Data size to compute the local variance, in beam sizes."
+        help="Data size to load the local variance, in beam sizes."
         " Default is 10 beam sizes.")
      
     add("-rel_rm", "--rel-sources-excl", dest="rel_src_excl", 
@@ -138,34 +138,14 @@ def main():
         "not to consider for final direction-dependent source selection."
         "In beam sizes. Default is None.")
 
-    add('-jc', '--json-config', dest='config',
+    add('-jc', '--json-config', dest='config', default=None,
         help='Json config file : No default')
 
     args = parser.parse_args()
     
-    # image and psf image
-
-
-    #source finder
-    sf = args.source_finder
-    psmth = args.pos_smooth
-    nsmth = args.neg_smooth
-    nthresh_isl = args.neg_thresh_isl
-    nthresh_pix = args.neg_thresh_pix
-    pthr_isl = args.thresh_isl
-    pthr_pix = args.thresh_pix
     pybdsm_opts = dict([ items.split("=") for items in args.to_pybdsm ] ) \
                        if args.to_pybdsm else {}
 
-    #boolean options
-    mkplt = args.do_relplots
-    dopsf = args.add_psfcorr
-    doloc = args.add_locvar
-        
-    # log level
-    log = args.log_level
-
-    # removing sources at some region
     if args.rel_src_excl:
         rel_rmsrc = args.rel_src_excl[0].split(':')
     else:
@@ -187,19 +167,6 @@ def main():
         os.makedirs(outdir)
 
     prefix = outdir +"/"+ prefix
-
-    # thresholds
-    sthr = args.snr_thresh
-    lthr = args.locvar_thresh
-    pcthr = args.psfcorr_thresh
-    negthr = args.num_negatives
-
-    # regions to evaluate
-    psfregion = args.psfcorr_region
-    locregion = args.local_region
-    negregion = args.neg_region
-    phase_remove = args.phase_center_rm
-  
     
     if args.config:
         keys = []
@@ -218,46 +185,60 @@ def main():
             if isinstance(val, unicode):
                 ddict[key] = str(val)
 
-        z = reldict.copy()
-        z.update({"prefix" : prefix})
-        z.update(sourcefin)
 
-        if args.imagename:
+        reldict.update(sourcefin)
+
+        enable = ddict["enable"]
+        ddict.pop("enable")
+
+        if args.image:
             images = args.image.split(",")
             psfs = args.psf.split(",")
+        
+            if len(images) != len(psfs):
+                psfs = [psfs[0]]*len(images)
 
             for i, (image, psf) in enumerate(zip(images, psfs)):
                 if len(images) >1:
                     prefix = prefix + "-%04d"%i
 
-                mc = rel.compute(image, psf, **z)
+                reldict["prefix"]  = prefix
+                mc = rel.load(image, psf, **reldict)
                 pos, neg = mc.get_reliability()
 
                 ddict["poscatalog"] = pos
                 ddict["negcatalog"] = neg
                 ddict["prefix"] = prefix
 
-                dc = dd.Parent(image, psf, **ddict)
-                ppos, nneg = dc.source_selection()
+                if enable and args.psf:
+                    dc = dd.load(image, psf, **ddict)
+                    ppos, nneg = dc.source_selection()
 
         else:
 
             image = jdict["imagename"]
             psf = jdict["psfname"]
-            mc = rel.compute(image, psf, **z)
+
+            reldict["prefix"]  = prefix 
+            mc = rel.load(image, psf, **reldict)
             pos, neg = mc.get_reliability()
 
             ddict["poscatalog"] = pos
             ddict["negcatalog"] = neg
             ddict["prefix"] = prefix
 
-            dc = dd.Parent(image, psf, **ddict)
-            ppos, nneg = dc.source_selection()
+            if enable and psf:
+                dc = dd.load(image, psf, **ddict)
+                ppos, nneg = dc.source_selection()
         
     else:
         # reliability
         images = args.image.split(",")
         psfs = args.psf.split(",")
+
+        psfregion = args.psfcorr_region
+        locregion = args.local_region
+
         if len(images) != len(psfs):
             psfs = [psfs[0]]*len(images)
 
@@ -266,23 +247,29 @@ def main():
             if len(images) >1:
                 prefix = prefix + "-%04d"%i
 
-            mc  = rel.compute(imagename=image, psfname=psf, sourcefinder_name=sf,
-                     makeplots=mkplt, do_psf_corr=dopsf, do_local_var=doloc,
+            mc  = rel.load(imagename=image, psfname=psf, sourcefinder_name=
+                     args.source_finder, makeplots=args.do_relplots, 
+                     do_psf_corr=args.add_psfcorr, do_local_var=args.add_locvar,
                      psf_corr_region=psfregion, local_var_region=locregion, 
-                     rel_excl_src=rel_rmsrc, pos_smooth=psmth,
-                     neg_smooth=nsmth, loglevel=log, thresh_isl=pthr_isl,
-                     thresh_pix=pthr_pix, neg_thresh_isl=nthresh_isl,
-                     neg_thresh_pix=nthresh_pix, prefix=prefix, **pybdsm_opts)
+                     rel_excl_src=rel_rmsrc, pos_smooth=args.pos_smooth,
+                     neg_smooth=args.neg_smooth, loglevel=args.log_level, 
+                     thresh_isl=args.thresh_isl, thresh_pix=args.thresh_pix,
+                     neg_thresh_isl=args.neg_thresh_isl, neg_thresh_pix=
+                     args.neg_thresh_pix, prefix=prefix, **pybdsm_opts)
 
             # assignign reliability values
             pos, neg = mc.get_reliability()
 
             # direction dependent detection tagging
-            dc = dd.Parent(imagename=image, psfname=psf, poscatalog=pos, negcatalog=neg,
-                       snr_thresh=sthr, local_thresh=lthr, local_region=locregion, 
-                       psfcorr_region=psfregion, high_corr_thresh=pcthr,
-                       negdetec_region=negregion, negatives_thresh=negthr,
-                       phasecenter_excl_radius=phase_remove, prefix=prefix,
-                       loglevel=log)
+            if args.psf:
+                dc = dd.load(imagename=image, psfname=psf, poscatalog=pos, negcatalog=neg,
+                           snr_thresh=args.snr_thresh, local_thresh=args.locvar_thresh,
+                           local_region=locregion, psfcorr_region=psfregion, 
+                           high_corr_thresh=args.psfcorr_thresh, negdetec_region=
+                           args.neg_region, negatives_thresh=args.num_negatives,
+                           phasecenter_excl_radius=args.phase_center_rm, prefix=prefix,
+                           loglevel=args.log_level)
             # tagging
-            ppose, nneg = dc.source_selection()
+                ppose, nneg = dc.source_selection()
+
+    os.system("rm -r *.pybdsm.log")

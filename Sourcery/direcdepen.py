@@ -6,11 +6,11 @@ import matplotlib
 matplotlib.use('Agg')
 import Tigger
 from Tigger.Coordinates import angular_dist_pos_angle as dist
-import utilss
+import utils
 import numpy
 
 
-class Parent(object):
+class load(object):
 
 
     def __init__(self, imagename, psfname, poscatalog, negcatalog,
@@ -65,17 +65,17 @@ class Parent(object):
         self.poscatalog = poscatalog
         self.negcatalog = negcatalog
         self.loglevel = loglevel
-        self.log = utilss.logger(self.loglevel)
+        self.log = utils.logger(self.loglevel)
 
 
         
         # reading the imagename data
         self.imagedata, self.wcs, self.header, self.pixsize =\
-                          utilss.reshape_data(self.imagename)
+                          utils.reshape_data(self.imagename)
         self.log.info("Loading image data")
 
         # computing the noise
-        self.noise = utilss.negative_noise(self.imagedata)
+        self.noise = utils.negative_noise(self.imagedata)
         self.log.info("The negative noise of an image is %e"%
                        self.noise)
 
@@ -153,14 +153,14 @@ class Parent(object):
         # signal-to-noise ratio
         self.signal_to_noise()
         # local variance
-        utilss.local_variance(
+        utils.local_variance(
              self.imagedata, self.header, self.poscatalog, self.wcs,
              self.pixsize, tag=self.snr_tag,local_region=self.local_region,
              noise=self.noise, highvariance_factor= self.local_thresh,
              high_local_tag=self.high_local_tag, neg_side=True,
              setatr=False, prefix=self.prefix, do_high_loc=True)
         # correlation
-        utilss.psf_image_correlation(
+        utils.psf_image_correlation(
             catalog=self.poscatalog, psfimage=self.psfname,
             imagedata=self.imagedata, header=self.header,
             wcs=self.wcs, pixelsize=self.pixsize, corr_region=

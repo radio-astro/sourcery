@@ -2,10 +2,10 @@
 
 import os
 from setuptools import setup
-import sourcery
+import Sourcery
 
 setup(name="sourcery",
-    version=sourcery.__version__,
+    version=Sourcery.__version__,
     description=".",
     author="Lerato Sebokolodi",
     author_email="Lerato Sebokolodi <mll.sebokolodi@gmail.com>",
