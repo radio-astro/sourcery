@@ -1,6 +1,8 @@
 {
     "imagename": "<input FITS image>",
     "psfname" : null,
+    "prefix" : null,
+    "outdir" : null,
     "reliability" : {
        "sourcefinder_name" : "pybdsm",
        "makeplots" : true,

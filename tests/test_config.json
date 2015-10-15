@@ -1,6 +1,8 @@
 {
     "imagename": "kat7restored.fits",
-    "psfname" : null,
+    "psfname" : "kat7psf.fits",
+    "prefix" : null,
+    "outdir" : "test_output",
     "reliability" : {
        "sourcefinder_name" : "pybdsm",
        "makeplots" : true,

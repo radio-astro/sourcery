@@ -50,8 +50,11 @@ def main():
         " 0-3, where 0, 1, 3, 4 are for info, debug, error and " 
         " critical respectively. Default is 0")
 
+    add("-od", "--output-dir", dest="outdir", default=None, 
+        help="Output products will be dumped here. System Default will be generated")
+
     add("-pref", "-dir-prefix", dest="prefix", default=None, 
-        help="Give a prefix to an output directory. Default is None")
+        help="Prefix for output products. System default will be generated")
 
     add("-apsf", "--add-psfcorr", dest="add_psfcorr", action="store_true",
         default=False, help="Do and add correlation of the sources with the"
@@ -153,26 +156,35 @@ def main():
 
 
     # making outdirectory
-    if args.prefix is None:
-        prefix = os.path.basename(args.image.split(",")[0]).split(".")[:-1]
-        prefix = ".".join(prefix)
-    else:
-        prefix = args.prefix
+    def get_prefix(prefix, imagename, outdir):
+        if prefix is None:
+            prefix = os.path.basename(imagename.split(",")[0]).split(".")[:-1]
+            prefix = ".".join(prefix)
 
-    outdir = prefix +"_"+ os.path.join(datetime.datetime.now().\
-                                       strftime("%Y-%m-%d-%H"))
-    outdir = os.path.abspath(outdir)
+        outdir = outdir or prefix +"_"+ os.path.join(datetime.datetime.now().\
+                                           strftime("%Y-%m-%d-%H"))
+        outdir = os.path.abspath(outdir)
 
-    if not os.path.exists(outdir): 
-        os.makedirs(outdir)
+        if not os.path.exists(outdir): 
+            os.makedirs(outdir)
 
-    prefix = outdir +"/"+ prefix
+        prefix = outdir +"/"+ prefix
+        
+        return prefix
     
     if args.config:
+
         keys = []
+
+        images = args.image.split(",") if args.image else None
+
         with open(args.config) as conf:
             jdict = json.load(conf)
         
+        prefix = get_prefix(jdict["prefix"],
+                    images[0] if images else jdict["imagename"],
+                    jdict["outdir"])
+
         reldict = jdict["reliability"]
         ddict = jdict["dd_tagging"]
         sourcefin = jdict["source_finder_opts"]
@@ -192,7 +204,6 @@ def main():
         ddict.pop("enable")
 
         if args.image:
-            images = args.image.split(",")
             psfs = args.psf.split(",")
         
             if len(images) != len(psfs):
@@ -235,6 +246,8 @@ def main():
         # reliability
         images = args.image.split(",")
         psfs = args.psf.split(",")
+
+        prefix = get_prefix(args.prefix, images[0], args.outdir)
 
         psfregion = args.psfcorr_region
         locregion = args.local_region
