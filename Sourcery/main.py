@@ -180,6 +180,9 @@ def main():
 
         with open(args.config) as conf:
             jdict = json.load(conf)
+            for key,val in jdict.items():
+                if isinstance(val, unicode):
+                    jdict[key] = str(val)
         
         prefix = get_prefix(jdict["prefix"],
                     images[0] if images else jdict["imagename"],
