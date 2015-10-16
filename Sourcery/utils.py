@@ -142,7 +142,7 @@ def thresh_mask(imagename, outname, thresh,
         emaj = hdr["BMAJ"]
         cell = abs(hdr["CDELT1"])
         beam = math.sqrt(emin*emaj)/cell
-        scales = [.1, .33, .5, 1., 1.5, 2.]#, 4., 8., 16.]
+        scales = [.1, 2, 5.0, 10., 20, 40.]#, 4., 8., 16.]
         smooth = None
         for scale in scales: 
             kk = scale * beam
