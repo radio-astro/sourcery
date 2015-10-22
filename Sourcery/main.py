@@ -250,7 +250,6 @@ def main():
         images = args.image.split(",")
         psfs = args.psf.split(",") if args.psf else [None]
 
-        prefix = get_prefix(args.prefix, images[0], args.outdir)
 
         psfregion = args.psfcorr_region
         locregion = args.local_region
@@ -259,6 +258,7 @@ def main():
             psfs = [psfs[0]]*len(images)
 
         for i, (image, psf) in enumerate(zip(images, psfs)):
+            prefix = get_prefix(args.prefix, images[0], args.outdir)
 
             if len(images) >1:
                 prefix = prefix + "-%04d"%i
