@@ -207,7 +207,7 @@ def main():
         ddict.pop("enable")
 
         if args.image:
-            psfs = args.psf.split(",")
+            psfs = args.psf.split(",") if args.psf else [None]
         
             if len(images) != len(psfs):
                 psfs = [psfs[0]]*len(images)
@@ -248,7 +248,7 @@ def main():
     else:
         # reliability
         images = args.image.split(",")
-        psfs = args.psf.split(",")
+        psfs = args.psf.split(",") if args.psf else [None]
 
         prefix = get_prefix(args.prefix, images[0], args.outdir)
 
