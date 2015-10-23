@@ -2,6 +2,17 @@
 Tools for creating high fidelity source catalogues from radio interferometric datasets.
 It also provides a tool for selecting sources responsible for artifacts in an image.
 
+## Requires
+
+* pybdsm (part lofar software package)
+* tigger
+* numpy
+* scipy
+* astlib
+
+You can find ubuntu packages for tigger, astlib, lofar on [radio-astro ppa](https://launchpad.net/~radio-astro/+archive/ubuntu/main). You may need to build the them source for other distributions, in that case find the source at the [ska-sa github repo](https://github.com/ska-sa)
+
+
 ## Install
 
 ### Pip
