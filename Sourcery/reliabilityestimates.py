@@ -22,7 +22,7 @@ class load(object):
                  psf_corr_region=2, local_var_region=10, rel_excl_src=None, 
                  pos_smooth=1.6, neg_smooth=1.6, loglevel=0, thresh_pix=5,
                  thresh_isl=3, neg_thresh_isl=3, neg_thresh_pix=5,
-                 prefix=None, **kw):
+                 prefix=None, do_rel=False, **kw):
 
         """ Takes in image and extracts sources and makes 
             reliability estimations..
@@ -30,48 +30,66 @@ class load(object):
  
         imagename: Fits image
         psfname: PSF fits image, optional. 
+
         sourcefinder_name: str, optional. Default 'pybdsm'.
             Uses source finder specified by the users.
+
         makeplots: bool, optional. Default is True.
             Make reliability plots.
+
         do_psf_corr : bool, optional. Default True.
             If True, correlation of sources with PSF will be added
             as an extra source parameter in reliability estimation.
             But the PSF fits image must be provided.
+
         do_local_var : bool, optional. Default is True.
             Adds local variance as an extra source parameter,
             similar to do_psf_corr but independent of the PSF image. 
+
         psf_corr_region : int, optional. Default value is 2. 
-            Data size to correlate around a source in beam sizes. 
+            Data size to correlate around a source in beam sizes.
+ 
         local_var_region: int, optional. Default 10.
             Data size to compute the local variance in beam sizes.
+
         rel_excl_src : float numbers, optional. Default is None. 
             Excludes sources in this region from the reliability
             estimations, e.g ra, dec, radius in degrees. For
             many regions: ra1, dec1, radius1: ra2, dec2, radius2.
+
         pos_smooth : float, optional. Default 1.6
             Data smoothing threshold in the positive side of an image.
             For default value 1.6, data peaks < 1.6 * image noise
             will be averaged out.
+
         neg_smooth : float, optional. Default 1.6.
             Similar to pos_smooth but applied to the negative side of
             an image.
+
         loglevel :  int, optional. Default is 0.
             Provides Pythonlogging options, 0, 1, 2 and 3 for info, debug,
             error and critial respectively.
+
         thresh_isl :  float, optional. Default is 3.
             Threshold for the island boundary in number of sigma above
             the mean. Determines extent of island used for fitting 
             [pybdsm]. For positive pixels.
+
         thresh_pix : float, optional. Default is 5.
             Source detection threshold: threshold for the island 
             peak in number of sigma above the mean. For positive pixels.
+
         neg_thresh_isl : float, optional. Default is 3. 
             Simialr to thresh_isl but applied to negative side 
             of the image.
+
         neg_thresh_pix : float, optional. Default is 5. 
             Similar to thresh_pix but applied to the negative
             side of an image.
+  
+        do_rel: boolean. Default is False. 
+            If True then a only reliable sources will be catalogued.
+        
          kw : kward for source extractions. Should be a mapping e.g
             kw['thresh_isl'] = 2.0 or kw['do_polarization'] = True 
         """
@@ -122,6 +140,7 @@ class load(object):
         self.makeplots = makeplots       
         self.do_psf_corr = do_psf_corr
         self.do_local_var = do_local_var
+        self.do_rel = do_rel
 
         # smoothing factors
         self.pos_smooth = pos_smooth
@@ -337,6 +356,10 @@ class load(object):
         reliable = nrel.max()
         self.log.info("Reliable sources have reliability > %.3f"
                       %reliable)
-
+        if reliable < 0:
+            reliable = 0.0
+        if self.do_rel:
+            os.system("tigger-convert --select='rel>%.3f' %s %s -f"
+                      %(reliable+0.1,self.poslsm,self.poslsm))
         return  self.poslsm, self.neglsm      
 

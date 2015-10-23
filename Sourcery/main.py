@@ -68,6 +68,15 @@ def main():
     add("-dmp", "--do-relplots", dest="do_relplots", action="store_false",
         default=True, help="Make reliability density plot. Default is True."
         " To disable add -dmp on the command line.")
+   
+    add("-drel","--do-reliable", dest="do_reliable", action="store_true",
+        default=False, help="If specified only sources above some reliability"
+        " thresholds are catalogued and are considered as reliable."
+        " This threshold is determined internally. A defautlt is False."
+        " Or a user can specify their reliability threshold using option rel_thresh")
+  
+    add("-rel", "--rel-thresh", dest="rel_thresh", default=None, type=float, 
+        help= "Set a reliability threshold. Default is None. See do_reliable.")
  
     add("-pcr", "--psfcorr-region",  dest="psfcorr_region", type=int,
         default=5, help="Data size to correlate, given in beam sizes."
@@ -154,6 +163,11 @@ def main():
     else:
         rel_rmsrc = None
 
+    # reliability threshold
+    if args.rel_thresh:
+        args.do_reliable = False
+    if args.do_reliable:
+        args.rel_thresh = None
 
     # making outdirectory
     def get_prefix(prefix, imagename, outdir):
@@ -207,7 +221,7 @@ def main():
         ddict.pop("enable")
 
         if args.image:
-            psfs = args.psf.split(",")
+            psfs = args.psf.split(",") if args.psf else [None]
         
             if len(images) != len(psfs):
                 psfs = [psfs[0]]*len(images)
@@ -223,6 +237,9 @@ def main():
                 ddict["poscatalog"] = pos
                 ddict["negcatalog"] = neg
                 ddict["prefix"] = prefix
+                if args.rel_thresh:
+                    os.system("tigger-convert --select='rel>%.3f' %s %s -f"
+                              %(args.rel_thresh, pos, pos))
 
                 if enable and args.psf:
                     dc = dd.load(image, psf, **ddict)
@@ -241,6 +258,10 @@ def main():
             ddict["negcatalog"] = neg
             ddict["prefix"] = prefix
 
+            if args.rel_thresh:
+                os.system("tigger-convert --select='rel>%.3f' %s %s -f"
+                         %(args.rel_thresh, pos, pos))
+
             if enable and psf:
                 dc = dd.load(image, psf, **ddict)
                 ppos, nneg = dc.source_selection()
@@ -248,7 +269,7 @@ def main():
     else:
         # reliability
         images = args.image.split(",")
-        psfs = args.psf.split(",")
+        psfs = args.psf.split(",") if args.psf else [None]
 
 
         psfregion = args.psfcorr_region
@@ -271,11 +292,14 @@ def main():
                      neg_smooth=args.neg_smooth, loglevel=args.log_level, 
                      thresh_isl=args.thresh_isl, thresh_pix=args.thresh_pix,
                      neg_thresh_isl=args.neg_thresh_isl, neg_thresh_pix=
-                     args.neg_thresh_pix, prefix=prefix, **pybdsm_opts)
+                     args.neg_thresh_pix, prefix=prefix, do_rel=args.do_reliable, 
+                     **pybdsm_opts)
 
             # assignign reliability values
             pos, neg = mc.get_reliability()
-
+            if args.rel_thresh:
+                os.system("tigger-convert --select='rel>%.3f' %s %s -f"
+                         %(args.rel_thresh, pos, pos))
             # direction dependent detection tagging
             if args.psf:
                 dc = dd.load(imagename=image, psfname=psf, poscatalog=pos, negcatalog=neg,
