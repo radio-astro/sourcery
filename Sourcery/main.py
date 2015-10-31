@@ -227,6 +227,9 @@ def main():
                 psfs = [psfs[0]]*len(images)
 
             for i, (image, psf) in enumerate(zip(images, psfs)):
+                prefix = get_prefix(jdict["prefix"],
+                         images[0] if images else jdict["imagename"],
+                         jdict["outdir"])
                 if len(images) >1:
                     prefix = prefix + "-%04d"%i
 

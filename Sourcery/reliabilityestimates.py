@@ -318,17 +318,30 @@ class load(object):
         for plane in positive.T:
             bandwidth.append(plane.std())
 
+        bw = []
+        for plane in negative.T:
+            bw.append(plane.std())
+
         nplanes = len(labels)
         cov = numpy.zeros([nplanes, nplanes])
+
+        nplanes = len(labels)
+        cop = numpy.zeros([nplanes, nplanes])
 
         for i in range(nplanes):
             for j in range(nplanes):
                 if i == j:
                     cov[i, j] = bandwidth[i]*(4.0/((nplanes+2)*
                                    npsrc))**(1.0/(nplanes+4.0))
-        
+
+        for i in range(nplanes):
+            for j in range(nplanes):
+                if i == j:
+                    cop[i, j] = bw[i]*(4.0/((nplanes+2)*
+                                   nnsrc))**(1.0/(nplanes+4.0))
+
         pcov = utils.gaussian_kde_set_covariance(positive.T, cov)
-        ncov = utils.gaussian_kde_set_covariance(negative.T, cov)
+        ncov = utils.gaussian_kde_set_covariance(negative.T, cop)
     
         # get number densities
         nps = pcov(positive.T) * npsrc
