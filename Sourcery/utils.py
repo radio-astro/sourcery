@@ -636,6 +636,9 @@ def plot(pos, neg, rel=None, labels=None, show=False, savefig=None):
 
     log.info("Making Reliability plots")
  
+    if not savefig:
+        return
+
     # labels for projections
     plots = []
     nplanes = len(labels)
@@ -694,9 +697,5 @@ def plot(pos, neg, rel=None, labels=None, show=False, savefig=None):
         pylab.xlabel(labels[x][1], fontsize="35")
         pylab.ylabel(labels[y][1], fontsize="35")
         pylab.grid()
-
-    if savefig : 
-        log.info("Saving the reliability plot.")
-        pylab.savefig(savefig)
-    
-
+    pylab.savefig(savefig)
+     
