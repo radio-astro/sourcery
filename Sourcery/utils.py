@@ -17,7 +17,6 @@ from scipy.ndimage import filters
 from astLib.astWCS import WCS
 import math
 from scipy import stats
-from scipy.interpolate import griddata
 
 
 matplotlib.rcParams.update({'font.size': 12})
@@ -640,6 +639,7 @@ def plot(pos, neg, rel=None, labels=None, show=False, savefig=None):
         return
 
     # labels for projections
+    from scipy.interpolate import griddata
     plots = []
     nplanes = len(labels)
     for i, label_i in enumerate(labels):
@@ -650,7 +650,7 @@ def plot(pos, neg, rel=None, labels=None, show=False, savefig=None):
 
     
     npos, nneg = len(pos), len(neg)
-    pylab.figure(figsize=(14*nplanes, 8*nplanes))
+    pylab.figure(figsize=(8*nplanes, 10*nplanes))
 
     if nneg < 5:
         log.error("Few number of detections cant proceed plotting."
@@ -658,15 +658,15 @@ def plot(pos, neg, rel=None, labels=None, show=False, savefig=None):
         return 
 
     if nplanes %2.0 == 0:
-        row  = nplanes/2.0
-        column = (nplanes-1.0)
+        column  = nplanes/2.0
+        row = (nplanes-1.0)
     else:
-        row =  (nplanes - 1.0)/2.0
-        column = nplanes
-    row_fix = row
-    if  column > 4.0:
-        row = column
-        column = row_fix
+        column =  (nplanes - 1.0)/2.0
+        row = nplanes
+    column_fix = column
+    if  row > 5.0:
+        row = column 
+        column = column_fix + 1
 
     for counter, (i, j, x, y) in enumerate(plots):
 
@@ -675,14 +675,15 @@ def plot(pos, neg, rel=None, labels=None, show=False, savefig=None):
         c,d = pos[:, i], pos[:, j]
 
         kernel = numpy.array([a.std(), b.std()])
-        cov = numpy.array([(kernel[0]**2, 0.0),(0.0, kernel[1]**2)])
+        cov = numpy.array([(kernel[0]**2, 0.0),(0.0, kernel[1]**2)])*\
+                         ((4.0/((nplanes+2)*nneg))**(1.0/(nplanes+4.0)))
         ncov = gaussian_kde_set_covariance(numpy.array([a, b]), cov)
         
         # define axis limits for plots
         ac = numpy.concatenate((a, c))        
         bd = numpy.concatenate((b, d))        
-        pylab.xlim(ac.min(), ac.max()*1.2)
-        pylab.ylim(bd.min(), bd.max()*1.2)
+        pylab.xlim(ac.min(), ac.max())
+        pylab.ylim(bd.min(), bd.max())
 
         #negative detection density field
         PN = ncov(numpy.array([a, b])) * nneg
@@ -692,8 +693,8 @@ def plot(pos, neg, rel=None, labels=None, show=False, savefig=None):
         zzz = griddata((a, b), PN,(xi[None,:], yi[:,None]), method="cubic")
         pylab.tick_params(axis='x', labelsize=30)
         pylab.tick_params(axis='y', labelsize=30)
-        pylab.contour(xi, yi, zzz, 20, linewidths=4) 
-        pylab.scatter(pos[:,i], pos[:,j], marker="o", c=rel, s=40)
+        pylab.contour(xi, yi, zzz, 20, linewidths=2, colors='c') 
+        pylab.scatter(pos[:,i], pos[:,j], marker="o", c='r', s=20)
         pylab.xlabel(labels[x][1], fontsize="35")
         pylab.ylabel(labels[y][1], fontsize="35")
         pylab.grid()

@@ -241,7 +241,7 @@ class load(object):
 
             if self.do_local_var:
                 local_variance = src.l
-            elif self.do_psf_corr:
+            if self.do_psf_corr:
                 cf = src.cf
             flux = src.brightness()
             peak = src.get_attr("_pybdsm_Peak_flux")
