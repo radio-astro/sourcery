@@ -21,10 +21,14 @@ from scipy import stats
 
 matplotlib.rcParams.update({'font.size': 12})
 
-def logger(level=0):
+def logger(level=0, prefix=None):
     
-    name = "logfile.log"
-    logging.basicConfig(filename=name)
+    if prefix:
+        name = prefix + ".log"
+        logging.basicConfig(filename=name)
+
+    else:
+        logging.basicConfig()
 
     LOGL = {"0": "INFO",
             "1": "DEBUG",
@@ -37,11 +41,9 @@ def logger(level=0):
     return log
 
 
-log = logger(level=0)
-
 
 #-----------------------knicked from Stats.py------------------------------- 
-def reshape_data (image):
+def reshape_data (image, prefix=None):
 
     """ Reshape FITS data to (stokes,freq,npix_ra,npix_dec).
 
@@ -50,7 +52,7 @@ def reshape_data (image):
          
     image: Fits data  
     """
-
+    
     with pyfits.open(image) as hdu:
         data = hdu[0].data
         hdr = hdu[0].header
@@ -58,9 +60,9 @@ def reshape_data (image):
         ndim = len(shape)
 
     wcs = WCS(hdr, mode="pyfits")
-    
-    pixel_size = abs(hdr["CDELT1"])
+    log = logger(level=0, prefix=prefix)
 
+    pixel_size = abs(hdr["CDELT1"])
     if ndim < 2:
         log.error("The FITS file needs at least two dimensions")
         
@@ -109,7 +111,6 @@ def invert_image(image, data, header, prefix=None):
     output = prefix + "_negatives.fits" or image.replace(ext,"_negative.fits")
     newdata = -data
     pyfits.writeto(output, newdata, header, clobber=True)
-
     return output
 
 
@@ -160,7 +161,7 @@ def thresh_mask(imagename, outname, thresh,
 
 def sources_extraction(image, output=None,
                        sourcefinder_name="pybdsm",
-                       **kw):
+                       prefix=None, **kw):
 
 
     """Runs pybdsm on the specified 'image', converts the 
@@ -177,7 +178,9 @@ def sources_extraction(image, output=None,
     # start with default PYBDSM options
     opts = {}
     opts.update(kw)
-     
+
+    log = logger(level=0, prefix=prefix)     
+
     if sourcefinder_name.lower() == "pybdsm":
         from lofar import bdsm
         img = bdsm.process_image(image, group_by_isl=True, **kw)
@@ -332,6 +335,7 @@ def local_variance(imagedata, header, catalog, wcs=None,
 
     bmaj = int(round(beam/pixelsize)) # beam size in pixels
 
+    log = logger(level=0, prefix=prefix)
     if not isinstance(local_region, int):
         if isinstance(local_region, float):
             local_region = int(round(local_region))
@@ -467,7 +471,8 @@ def local_variance(imagedata, header, catalog, wcs=None,
 
 def psf_image_correlation(catalog, psfimage, imagedata, header, wcs=None ,
                      pixelsize=None, corr_region=5, thresh=0.4, tags=None,
-                     coefftag='high_corr', setatr=True, do_high=False):
+                     coefftag='high_corr', setatr=True, do_high=False, 
+                     prefix=None):
 
 
     """ Computes correlation of the image and PSF image
@@ -510,6 +515,7 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs=None ,
     psf_data, wcs_psf, psf_hdr, psf_pix = reshape_data(image=psfimage)
     
     shape = image_data.shape
+    log = logger(level=0, prefix=prefix)
 
     if pixelsize is None:
         pixelsize = abs(header["CDELT1"])
@@ -631,8 +637,10 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs=None ,
     return corr
 
 
-def plot(pos, neg, rel=None, labels=None, show=False, savefig=None):
+def plot(pos, neg, rel=None, labels=None, show=False, savefig=None,
+         prefix=None):
 
+    log = logger(level=0, prefix=prefix)
     log.info("Making Reliability plots")
  
     if not savefig:

@@ -95,18 +95,25 @@ class load(object):
         """
 
 
-        # log level  
-        self.loglevel = loglevel
-        self.log = utils.logger(self.loglevel)
        
         # image, psf image
         self.imagename = imagename
         self.psfname = psfname 
+        # setting output file names  
+     
+        self.prefix = prefix
+        self.poslsm = self.prefix + "_positive.lsm.html"
+        self.neglsm = self.prefix + "_negative.lsm.html"
+
+        # log level  
+        self.loglevel = loglevel
+        self.log = utils.logger(self.loglevel, prefix=self.prefix)
+
         self.log.info("Loading Image data")
 
         # reading imagename data
         self.imagedata, self.wcs, self.header, self.pixelsize =\
-            utils.reshape_data(self.imagename)
+            utils.reshape_data(self.imagename, prefix=self.prefix)
 
         self.do_psf_corr = do_psf_corr
         if not self.psfname:
@@ -125,11 +132,6 @@ class load(object):
         self.sourcefinder_name  = sourcefinder_name
         self.log.info("Using %s source finder to extract sources."%
                       self.sourcefinder_name)
-
-        # setting output file names       
-        self.prefix = prefix
-        self.poslsm = self.prefix + "_positive.lsm.html"
-        self.neglsm = self.prefix + "_negative.lsm.html"
 
 
         # making negative image
@@ -189,7 +191,8 @@ class load(object):
         utils.sources_extraction(
              image=tpos.name, output=lsmname, 
              sourcefinder_name=self.sourcefinder_name, 
-             blank_limit=self.noise/100.0, **kw)
+             blank_limit=self.noise/100.0, prefix=self.prefix,
+             **kw)
 
 
     def remove_sources_within(self, catalog, rel_excl_src=None):
@@ -279,13 +282,14 @@ class load(object):
                               catalog=self.poslsm, wcs=self.wcs, 
                               pixelsize=self.pixelsize, local_region=
                               self.local_var_region, savefig=False,
-                              highvariance_factor=None, neg_side=True)
+                              highvariance_factor=None, prefix=self.prefix,
+                              neg_side=True)
 
             utils.local_variance(self.imagedata, self.header,
                               catalog=self.neglsm, wcs=self.wcs,
                               pixelsize=self.pixelsize, local_region=
                               self.local_var_region, savefig=False,
-                              highvariance_factor=None, neg_side=True)
+                              highvariance_factor=None, prefix=self.prefix, neg_side=True)
         # compute correlation if only do_psf_corr = True 
         #and the psf is provided 
         if self.do_psf_corr and self.psfname:
@@ -293,12 +297,12 @@ class load(object):
                  catalog=self.poslsm, psfimage=self.psfname,
                  imagedata=self.imagedata, header=self.header,
                  wcs=self.wcs, pixelsize=self.pixelsize,
-                 corr_region=self.psf_corr_region)
+                 corr_region=self.psf_corr_region, prefix= self.prefix)
             utils.psf_image_correlation(
                  catalog=self.neglsm, psfimage=self.psfname, 
                  imagedata=self.imagedata, header=self.header,
                  wcs=self.wcs, pixelsize=self.pixelsize, 
-                 corr_region=self.psf_corr_region)
+                 corr_region=self.psf_corr_region, prefix=self.prefix)
       
         ##TODO verbose vs. logging
         pmodel = Tigger.load(self.poslsm, verbose=self.loglevel)
@@ -348,7 +352,7 @@ class load(object):
         if self.makeplots:
             savefig = self.prefix + "_planes.png"
             utils.plot(positive, negative, rel=rel, labels=labels,
-                        savefig=savefig)
+                        savefig=savefig, prefix=self.prefix)
 
         # setting up the reliability threshold
         # get number densities

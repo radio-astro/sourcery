@@ -65,13 +65,12 @@ class load(object):
         self.poscatalog = poscatalog
         self.negcatalog = negcatalog
         self.loglevel = loglevel
-        self.log = utils.logger(self.loglevel)
-
-
+        self.prefix = prefix
+        self.log = utils.logger(self.loglevel, prefix=self.prefix)
         
         # reading the imagename data
         self.imagedata, self.wcs, self.header, self.pixsize =\
-                          utils.reshape_data(self.imagename)
+                          utils.reshape_data(self.imagename, prefix=self.prefix)
         self.log.info("Loading image data")
 
         # computing the noise
@@ -102,7 +101,6 @@ class load(object):
         self.dec0 = numpy.deg2rad(self.header["CRVAL2"])
         self.bmaj_deg = self.header['BMAJ'] # in degrees
 
-        self.prefix = prefix
 
     def signal_to_noise(self):
         
@@ -166,7 +164,7 @@ class load(object):
             wcs=self.wcs, pixelsize=self.pixsize, corr_region=
             self.psfcorr_region, thresh=self.high_corr_thresh,
             tags=self.high_local_tag, coefftag=self.high_corr_tag,
-            setatr=False, do_high=True)
+            setatr=False, do_high=True, prefix=self.prefix)
         # number of negative detections
         self.number_negatives()
 
