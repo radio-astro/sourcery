@@ -108,10 +108,11 @@ class load(object):
         self.imagedata, self.wcs, self.header, self.pixelsize =\
             utils.reshape_data(self.imagename)
 
+        self.do_psf_corr = do_psf_corr
         if not self.psfname:
             self.log.info("No psf provided, do_psf_corr = False.")
             self.do_psf_corr = False
-     
+           
         # computing negative noise
         self.noise = utils.negative_noise(self.imagedata)
         
@@ -137,8 +138,7 @@ class load(object):
                                self.header, self.prefix)
 
         # boolean optionals    
-        self.makeplots = makeplots       
-        self.do_psf_corr = do_psf_corr
+        self.makeplots = makeplots
         self.do_local_var = do_local_var
         self.do_rel = do_rel
 
@@ -241,7 +241,7 @@ class load(object):
 
             if self.do_local_var:
                 local_variance = src.l
-            if self.do_psf_corr:
+            elif self.do_psf_corr:
                 cf = src.cf
             flux = src.brightness()
             peak = src.get_attr("_pybdsm_Peak_flux")
