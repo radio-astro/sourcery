@@ -362,8 +362,8 @@ class load(object):
                         savefig=savefig, prefix=self.prefix)
 
          ##TODO remove reliable here
-        if self.do_rel:
-            os.system("tigger-convert --select='rel>%.3f' %s %s -f"
-                      %(reliable+0.1,self.poslsm,self.poslsm))
+        i#f self.do_rel:
+         #   os.system("tigger-convert --select='rel>%.3f' %s %s -f"
+         #             %(reliable+0.1,self.poslsm,self.poslsm))
         return  self.poslsm, self.neglsm      
 
