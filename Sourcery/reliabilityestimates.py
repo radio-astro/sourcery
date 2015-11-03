@@ -319,21 +319,23 @@ class load(object):
 
         # setting up a kernel, Gaussian kernel
         bandwidth = []
-        mean_kernel = []
+        #mean_kernel, band = []
         for plane in positive.T:
             bandwidth.append(plane.std())
-            mean_kernel.append(plane.mean())
+            #mean_kernel.append(plane.std()) ##TODO mean or std
+               
 
 
         nplanes = len(labels)
         cov = numpy.zeros([nplanes, nplanes])
-        cova = numpy.zeros([nplanes, nplanes])
+        #cova = numpy.zeros([nplanes, nplanes])
 
         for i in range(nplanes):
             for j in range(nplanes):
                 if i == j:
                     cov[i, j] = bandwidth[i]*(4.0/((nplanes+2)*
                                   npsrc))**(1.0/(nplanes+4.0))
+   
 
 
         pcov = utils.gaussian_kde_set_covariance(positive.T, cov)
@@ -347,12 +349,7 @@ class load(object):
         # define reliability of positive catalog
         rel = (nps-nns)/nps
 
-        # setting up the reliability threshold
-        mps = pcov(mean_kernel) * npsrc
-        mns = ncov(mean_kernel) * nnsrc    
-        reliable = (mps-mns)/mps   
-
-        
+  
 
         for src, rf in zip(posSources, rel):
             src.setAttribute("rel", rf)
@@ -364,8 +361,9 @@ class load(object):
             utils.plot(positive, negative, rel=rel, labels=labels,
                         savefig=savefig, prefix=self.prefix)
 
-        #if self.do_rel:
-        #    os.system("tigger-convert --select='rel>%.3f' %s %s -f"
-        #              %(reliable+0.1,self.poslsm,self.poslsm))
+         ##TODO remove reliable here
+        if self.do_rel:
+            os.system("tigger-convert --select='rel>%.3f' %s %s -f"
+                      %(reliable+0.1,self.poslsm,self.poslsm))
         return  self.poslsm, self.neglsm      
 
