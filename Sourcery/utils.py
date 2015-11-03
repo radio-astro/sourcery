@@ -186,7 +186,7 @@ def sources_extraction(image, output=None,
         img = bdsm.process_image(image, group_by_isl=True, **kw)
         img.write_catalog(outfile=gaul, format="ascii", 
                           catalog_type="gaul", clobber=True)
-    verifyGaulModel(gaul)
+
 
     # converting the model to Tigger
     tc = ["tigger-convert", gaul, output,
@@ -211,44 +211,20 @@ def sources_extraction(image, output=None,
                  (process.returncode))
     else:
         log.info("DONE: tigger-convert succeeded catalog is %s"%output)
+        verifyModel(output)
 
 
 
 #---------------------------------------------------------------------------------------
-#knicked from pyxis lsm.pybdsm_search
-def verifyGaulModel(gaullsm):
+def verifyModel(lsm):
+    ##TODO temporary
+    model = Tigger.load(lsm)
+    zeroflux = filter(lambda a: (a.flux.I or a.brightness())==0,
+                      model.sources)
+    for s in zeroflux:
+        model.sources.remove(s)
+    model.save(lsm)
 
-  """Check all sources in a gaul file are in valid locations
-     before running tigger.
-
-  convert. Useful when images are 'all-sky' and have undefined regions.
-  """
-
-  falseSources = 0
-  olsm = ""
-  names = []
-  fh=open(gaullsm, "r")
-  for ll in fh.readlines():
-    cll = ' '.join(ll.split())
-    if cll == '' or cll.startswith("#"):
-      olsm += ll
-      if cll.startswith("# Gaus_id"):
-        names = cll.split()
-      continue
-    lineArray = cll.split(" ")
-    if math.isnan(float(lineArray[names.index("RA")] )) : 
-        falseSources += 1
-    if float(lineArray[names.index("Peak_flux")]) <= 0 : 
-        falseSources+=1
-    if float(lineArray[names.index("Total_flux")]) <= 0 :
-        falseSources += 1
-    else: olsm += ll
-  fh.close()
-
-  fh=open(gaullsm, "w")
-  fh.write(olsm)
-  fh.close() 
-     
 
 
 #----------------------------------------------------

@@ -319,31 +319,41 @@ class load(object):
 
         # setting up a kernel, Gaussian kernel
         bandwidth = []
+        mean_kernel = []
         for plane in positive.T:
             bandwidth.append(plane.std())
+            mean_kernel.append(plane.mean())
 
 
         nplanes = len(labels)
         cov = numpy.zeros([nplanes, nplanes])
-        covn = numpy.zeros([nplanes, nplanes])
+        cova = numpy.zeros([nplanes, nplanes])
 
         for i in range(nplanes):
             for j in range(nplanes):
                 if i == j:
                     cov[i, j] = bandwidth[i]*(4.0/((nplanes+2)*
-                                   npsrc))**(1.0/(nplanes+4.0))
+                                  npsrc))**(1.0/(nplanes+4.0))
 
 
         pcov = utils.gaussian_kde_set_covariance(positive.T, cov)
         ncov = utils.gaussian_kde_set_covariance(negative.T, cov)
     
+
         # get number densities
         nps = pcov(positive.T) * npsrc
         nns = ncov(positive.T) * nnsrc
 
         # define reliability of positive catalog
         rel = (nps-nns)/nps
-    
+
+        # setting up the reliability threshold
+        mps = pcov(mean_kernel) * npsrc
+        mns = ncov(mean_kernel) * nnsrc    
+        reliable = (mps-mns)/mps   
+
+        
+
         for src, rf in zip(posSources, rel):
             src.setAttribute("rel", rf)
             out_lsm = self.poslsm
@@ -354,19 +364,8 @@ class load(object):
             utils.plot(positive, negative, rel=rel, labels=labels,
                         savefig=savefig, prefix=self.prefix)
 
-        # setting up the reliability threshold
-        # get number densities
-        nnps = pcov(negative.T) * npsrc
-        nnns = ncov(negative.T) * nnsrc
-        
-        nrel = (nnps-nnns)/nnps
-        reliable = nrel.max()
-        self.log.info("Reliable sources have reliability > %.3f"
-                      %reliable)
-        if reliable < 0:
-            reliable = 0.0
-        if self.do_rel:
-            os.system("tigger-convert --select='rel>%.3f' %s %s -f"
-                      %(reliable+0.1,self.poslsm,self.poslsm))
+        #if self.do_rel:
+        #    os.system("tigger-convert --select='rel>%.3f' %s %s -f"
+        #              %(reliable+0.1,self.poslsm,self.poslsm))
         return  self.poslsm, self.neglsm      
 
