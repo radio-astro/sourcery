@@ -6,7 +6,7 @@ import Sourcery
 
 setup(name="sourcery",
     version=Sourcery.__version__,
-    description=".",
+    description="Tools for creating high fidelity source catalogues from radio interferometric datasets",
     author="Lerato Sebokolodi",
     author_email="Lerato Sebokolodi <mll.sebokolodi@gmail.com>",
     url="https://github.com/sphemakh/sourcery",
