@@ -22,7 +22,7 @@ class load(object):
                  psf_corr_region=2, local_var_region=10, rel_excl_src=None, 
                  pos_smooth=1.6, neg_smooth=1.6, loglevel=0, thresh_pix=5,
                  thresh_isl=3, neg_thresh_isl=3, neg_thresh_pix=5,
-                 prefix=None, do_rel=False, **kw):
+                 prefix=None, do_nearsources=False, **kw):
 
         """ Takes in image and extracts sources and makes 
             reliability estimations..
@@ -86,10 +86,11 @@ class load(object):
         neg_thresh_pix : float, optional. Default is 5. 
             Similar to thresh_pix but applied to the negative
             side of an image.
-  
-        do_rel: boolean. Default is False. 
-            If True then a only reliable sources will be catalogued.
-        
+
+        do_nearsources: boolean. Default is False.
+            If true it adds number of nearest neighnours as an extra
+            parameter. It looks for sources around 5 beam sizes.
+   
          kw : kward for source extractions. Should be a mapping e.g
             kw['thresh_isl'] = 2.0 or kw['do_polarization'] = True 
         """
@@ -114,6 +115,8 @@ class load(object):
         # reading imagename data
         self.imagedata, self.wcs, self.header, self.pixelsize =\
             utils.reshape_data(self.imagename, prefix=self.prefix)
+
+        self.bmaj = numpy.deg2rad(self.header["BMAJ"])
 
         self.do_psf_corr = do_psf_corr
         if not self.psfname:
@@ -142,7 +145,7 @@ class load(object):
         # boolean optionals    
         self.makeplots = makeplots
         self.do_local_var = do_local_var
-        self.do_rel = do_rel
+        self.nearsources = do_nearsources
 
         # smoothing factors
         self.pos_smooth = pos_smooth
@@ -211,8 +214,11 @@ class load(object):
                          sources.remove(src)
             model.save(catalog)
 
+    def nearest_neighbour(self, model, src):
+        near = model.getSourcesNear(src.pos.ra, src.pos.dec, 5 * self.bmaj)
+        return (1.0/float(len(near)))
     
-    def params(self, sources):
+    def params(self, sources, model=None):
 
         labels = dict(size=(0, "Log$_{10}$(Source area)"), 
                       peak=(1, "Log$_{10}$( Peak flux [Jy] )"), 
@@ -225,6 +231,9 @@ class load(object):
         if self.do_local_var:
             labels.update( {"local": (len(labels),
                             "Log$_{10}$(Local Variance)")})
+        if self.nearsources:
+            labels.update( {"Nearer": (len(labels),
+                            "Log$_{10}$(Source Near)")})     
         
         out = numpy.zeros([nsrc, len(labels)])
 
@@ -246,17 +255,36 @@ class load(object):
                 local_variance = src.l
             if self.do_psf_corr:
                 cf = src.cf
+
+            if self.nearsources:
+                near = self.nearest_neighbour(model, src)
+
             flux = src.brightness()
             peak = src.get_attr("_pybdsm_Peak_flux")
-            
-            if self.do_psf_corr and self.do_local_var:
+  
+            if self.do_psf_corr and self.do_local_var and self.nearsources:
+                out[i,...] = area, peak, flux, cf, local_variance, near
+
+            elif self.do_psf_corr and self.nearsources: 
+                out[i,...] = area, peak, flux, cf, near
+
+            elif self.do_local_var and self.nearsources: 
+                out[i,...] = area, peak, flux, local_variance, near
+
+            elif self.do_psf_corr and self.do_local_var:
                 out[i,...] = area, peak, flux, cf, local_variance
+
             elif self.do_psf_corr:
                 out[i,...] = area, peak, flux , cf
+
             elif self.do_local_var:
-                out[i,...] = area, peak, flux , local_variance           
+                out[i,...] = area, peak, flux , local_variance 
+
+            elif self.nearsources:
+                out[i,...] = area, peak, flux , near                     
             else:
                 out[i,...] = area, peak, flux
+
         return numpy.log10(out), labels 
 
 
@@ -314,29 +342,26 @@ class load(object):
         npsrc = len(posSources)
         nnsrc = len(negSources)      
  
-        positive, labels = self.params(posSources)
-        negative, labels = self.params(negSources)
+        positive, labels = self.params(posSources, pmodel)
+        negative, labels = self.params(negSources, nmodel)
 
         # setting up a kernel, Gaussian kernel
         bandwidth = []
-        #mean_kernel, band = []
-        for plane in positive.T:
+
+        for plane in negative.T:
             bandwidth.append(plane.std())
-            #mean_kernel.append(plane.std()) ##TODO mean or std
-               
+
 
 
         nplanes = len(labels)
         cov = numpy.zeros([nplanes, nplanes])
-        #cova = numpy.zeros([nplanes, nplanes])
+
 
         for i in range(nplanes):
             for j in range(nplanes):
                 if i == j:
-                    cov[i, j] = bandwidth[i]*(4.0/((nplanes+2)*
-                                  npsrc))**(1.0/(nplanes+4.0))
-   
-
+                    cov[i, j] = bandwidth[i]*((4.0/((nplanes+2)*
+                                  npsrc))**(1.0/(nplanes+4.0)))
 
         pcov = utils.gaussian_kde_set_covariance(positive.T, cov)
         ncov = utils.gaussian_kde_set_covariance(negative.T, cov)
@@ -349,8 +374,6 @@ class load(object):
         # define reliability of positive catalog
         rel = (nps-nns)/nps
 
-  
-
         for src, rf in zip(posSources, rel):
             src.setAttribute("rel", rf)
             out_lsm = self.poslsm
@@ -361,9 +384,5 @@ class load(object):
             utils.plot(positive, negative, rel=rel, labels=labels,
                         savefig=savefig, prefix=self.prefix)
 
-         ##TODO remove reliable here
-        #f self.do_rel:
-         #   os.system("tigger-convert --select='rel>%.3f' %s %s -f"
-         #             %(reliable+0.1,self.poslsm,self.poslsm))
         return  self.poslsm, self.neglsm      
 

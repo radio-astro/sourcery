@@ -63,20 +63,18 @@ def main():
 
     add("-alv", "--add-localvar", dest="add_locvar", action="store_true",
         default=False, help=" Include local variance as an extra source"
-        "parameter. See -apsf. Similar to -apsf.")
+        "parameter. See -apsf.")
+
+    add("-dn", "--do-nearsources", dest="do_nearsources", action="store_true",
+        default=False, help=" Include number of nearest sources as an extra source"
+        "parameter. See -apsf. It looks for sources within 5 beam sizes.")
 
     add("-dmp", "--do-relplots", dest="do_relplots", action="store_false",
         default=True, help="Make reliability density plot. Default is True."
         " To disable add -dmp on the command line.")
-   
-    add("-drel","--do-reliable", dest="do_reliable", action="store_true",
-        default=False, help="If specified only sources above some reliability"
-        " thresholds are catalogued and are considered as reliable."
-        " This threshold is determined internally. A defautlt is False."
-        " Or a user can specify their reliability threshold using option rel_thresh")
-  
+ 
     add("-rel", "--rel-thresh", dest="rel_thresh", default=None, type=float, 
-        help= "Set a reliability threshold. Default is None. See do_reliable.")
+        help= "Set a reliability threshold. Default is None.")
  
     add("-pcr", "--psfcorr-region",  dest="psfcorr_region", type=int,
         default=5, help="Data size to correlate, given in beam sizes."
@@ -162,12 +160,6 @@ def main():
         rel_rmsrc = args.rel_src_excl[0].split(':')
     else:
         rel_rmsrc = None
-
-    # reliability threshold
-    if args.rel_thresh:
-        args.do_reliable = False
-    if args.do_reliable:
-        args.rel_thresh = None
 
     # making outdirectory
     def get_prefix(prefix, imagename, outdir):
@@ -295,8 +287,8 @@ def main():
                      neg_smooth=args.neg_smooth, loglevel=args.log_level, 
                      thresh_isl=args.thresh_isl, thresh_pix=args.thresh_pix,
                      neg_thresh_isl=args.neg_thresh_isl, neg_thresh_pix=
-                     args.neg_thresh_pix, prefix=prefix, do_rel=args.do_reliable, 
-                     **pybdsm_opts)
+                     args.neg_thresh_pix, prefix=prefix,  
+                     do_nearsources=args.do_nearsources, **pybdsm_opts)
 
             # assignign reliability values
             pos, neg = mc.get_reliability()

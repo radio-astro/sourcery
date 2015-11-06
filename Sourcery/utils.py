@@ -641,6 +641,7 @@ def plot(pos, neg, rel=None, labels=None, show=False, savefig=None,
                   "Aborting")        
         return 
 
+    ##TODO: plots semi automated
     if nplanes %2.0 == 0:
         column  = nplanes/2.0
         row = (nplanes-1.0)
@@ -677,8 +678,8 @@ def plot(pos, neg, rel=None, labels=None, show=False, savefig=None,
         zzz = griddata((a, b), PN,(xi[None,:], yi[:,None]), method="cubic")
         pylab.tick_params(axis='x', labelsize=30)
         pylab.tick_params(axis='y', labelsize=30)
-        pylab.contour(xi, yi, zzz, 20, linewidths=2, colors='c') 
-        pylab.scatter(pos[:,i], pos[:,j], marker="o", c='r', s=20)
+        pylab.contour(xi, yi, zzz, 20, linewidths=4, colors='c') 
+        pylab.scatter(pos[:,i], pos[:,j], marker="o", c='r', s=35)
         pylab.xlabel(labels[x][1], fontsize="35")
         pylab.ylabel(labels[y][1], fontsize="35")
         pylab.grid()
