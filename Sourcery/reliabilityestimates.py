@@ -361,7 +361,7 @@ class load(object):
             for j in range(nplanes):
                 if i == j:
                     cov[i, j] = bandwidth[i]*((4.0/((nplanes+2)*
-                                  npsrc))**(1.0/(nplanes+4.0)))
+                                  nnsrc))**(1.0/(nplanes+4.0)))
 
         pcov = utils.gaussian_kde_set_covariance(positive.T, cov)
         ncov = utils.gaussian_kde_set_covariance(negative.T, cov)
