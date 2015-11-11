@@ -90,6 +90,9 @@ class load(object):
         do_nearsources: boolean. Default is False.
             If true it adds number of nearest neighnours as an extra
             parameter. It looks for sources around 5 beam sizes.
+
+        savefits: boolean. Default is False.
+            if True a negative image is saved.
    
          kw : kward for source extractions. Should be a mapping e.g
             kw['thresh_isl'] = 2.0 or kw['do_polarization'] = True 
@@ -103,14 +106,16 @@ class load(object):
         # setting output file names  
      
         self.prefix = prefix
-        self.poslsm = self.prefix + "_positive.lsm.html"
+        self.poslsm = self.prefix + ".lsm.html"
         self.neglsm = self.prefix + "_negative.lsm.html"
 
         # log level  
         self.loglevel = loglevel
         self.log = utils.logger(self.loglevel, prefix=self.prefix)
 
-        self.log.info("Loading Image data")
+        self.log.info(" Loading the image data")
+
+ 
 
         # reading imagename data
         self.imagedata, self.wcs, self.header, self.pixelsize =\
@@ -120,24 +125,25 @@ class load(object):
 
         self.do_psf_corr = do_psf_corr
         if not self.psfname:
-            self.log.info("No psf provided, do_psf_corr = False.")
+            self.log.info(" No psf provided, do_psf_corr is set to False.")
             self.do_psf_corr = False
            
         # computing negative noise
         self.noise = utils.negative_noise(self.imagedata)
         
-        self.log.info("The negative noise is %e"%self.noise)
+        self.log.info(" The negative noise is %e Jy/beam"%self.noise)
 
         if self.noise == 0: 
-            self.log.debug("The negative noise is 0, check image")
+            self.log.debug(" The negative noise is 0, check image")
 
         # source finder initialization
         self.sourcefinder_name  = sourcefinder_name
-        self.log.info("Using %s source finder to extract sources."%
+        self.log.info(" Using %s source finder to extract the sources."%
                       self.sourcefinder_name)
 
 
         # making negative image
+        self.savefits = False
         self.negativeimage = utils.invert_image(
                                self.imagename, self.imagedata,
                                self.header, self.prefix)
@@ -292,13 +298,21 @@ class load(object):
 
 
         # finding sources 
+        self.log.info(" Extracting the sources on both sides ")
+        
         self.source_finder(image=self.imagename, lsmname=self.poslsm, 
                            thresh=self.pos_smooth, **self.opts_pos)
 
         self.source_finder(image=self.negativeimage, lsmname=self.neglsm,
                            thresh=self.neg_smooth, **self.opts_neg)
 
+        self.log.info(" Source Finder completed successfully ")
+
+        if not self.savefits:
+            os.system("rm -r %s"%self.negativeimage)
+
         # removing sources within a specified radius
+        
         self.remove_sources_within(catalog=self.poslsm, rel_excl_src=
                                    self.rel_excl_src)
         self.remove_sources_within(catalog=self.neglsm, rel_excl_src=
@@ -306,6 +320,7 @@ class load(object):
 
         # add local variance as a parameter
         if self.do_local_var:
+            self.log.info(" Computing the local variance around positive detections ")
             utils.local_variance(self.imagedata, self.header, 
                               catalog=self.poslsm, wcs=self.wcs, 
                               pixelsize=self.pixelsize, local_region=
@@ -313,14 +328,21 @@ class load(object):
                               highvariance_factor=None, prefix=self.prefix,
                               neg_side=True)
 
+            self.log.info(" DONE: Local variance on the positive side was sucessful ")
+            self.log.info(" Computing the local variance around the negative detections ")
+
             utils.local_variance(self.imagedata, self.header,
                               catalog=self.neglsm, wcs=self.wcs,
                               pixelsize=self.pixelsize, local_region=
                               self.local_var_region, savefig=False,
                               highvariance_factor=None, prefix=self.prefix, neg_side=True)
+
+            self.log.info("DONE: Computation of the local variance completed successfully ")
+           
         # compute correlation if only do_psf_corr = True 
         #and the psf is provided 
         if self.do_psf_corr and self.psfname:
+            self.log.info(" Computing the correlation factor of the detections with the PSF ")
             utils.psf_image_correlation(
                  catalog=self.poslsm, psfimage=self.psfname,
                  imagedata=self.imagedata, header=self.header,
@@ -331,9 +353,10 @@ class load(object):
                  imagedata=self.imagedata, header=self.header,
                  wcs=self.wcs, pixelsize=self.pixelsize, 
                  corr_region=self.psf_corr_region, prefix=self.prefix)
-      
+            self.log.info(" DONE: Correlation factor has been successfully assigned to the detections.")
         ##TODO verbose vs. logging
         pmodel = Tigger.load(self.poslsm, verbose=self.loglevel)
+
         nmodel = Tigger.load(self.neglsm, verbose=self.loglevel)
         
         posSources = pmodel.sources

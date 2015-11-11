@@ -23,12 +23,11 @@ matplotlib.rcParams.update({'font.size': 12})
 
 def logger(level=0, prefix=None):
     
-    if prefix:
-        name = prefix + ".log"
-        logging.basicConfig(filename=name)
-
-    else:
+    if not prefix:
         logging.basicConfig()
+    else:
+        name = prefix + ".log"
+        logging.basicConfig(filename=name)  
 
     LOGL = {"0": "INFO",
             "1": "DEBUG",
@@ -64,7 +63,7 @@ def reshape_data (image, prefix=None):
 
     pixel_size = abs(hdr["CDELT1"])
     if ndim < 2:
-        log.error("The FITS file needs at least two dimensions")
+        log.error(" The FITS file needs at least two dimensions")
         
 
  # This is the shape I want the data in
@@ -90,7 +89,7 @@ def reshape_data (image, prefix=None):
         if not hdr["CTYPE3"].startswith("FREQ"):
             data = data[0,...]
     elif ndim > 4:
-        log.error("FITS file has more than 4 axes. Aborting")
+        log.error(" FITS file has more than 4 axes. Aborting")
         
     return data, wcs, hdr, pixel_size
 
@@ -207,10 +206,10 @@ def sources_extraction(image, output=None,
     else:
         process.wait()
     if process.returncode:
-        log.error("tigger-convert returns errr code %d"%
+        log.error(" tigger-convert returns errr code %d"%
                  (process.returncode))
     else:
-        log.info("DONE: tigger-convert succeeded catalog is %s"%output)
+        log.info(" DONE: tigger-convert succeeded catalog is %s"%output)
         verifyModel(output)
 
 
@@ -315,14 +314,14 @@ def local_variance(imagedata, header, catalog, wcs=None,
     if not isinstance(local_region, int):
         if isinstance(local_region, float):
             local_region = int(round(local_region))
-            log.debug("Float is provided and int is required,"
-                       "arounding offto the nearest integer")
+            log.debug(" A floating point had been provided while an integer is required,"
+                      " arounding off to the nearest integer.")
             if local_region == 0:
-                log.error("It rounded off to zero now,"
-                          "change local_region into an integer."
-                          "Aborting")
+                log.error(" The local variane region had rounded off to 0,"
+                          " change local_region into an integer."
+                          " Aborting ")
         else:
-            log.error("local_region must be an integer. Abort")
+            log.error(" local_region must be an integer. Abort ")
     
     step = local_region * bmaj
 
@@ -332,8 +331,8 @@ def local_variance(imagedata, header, catalog, wcs=None,
     sources = []
 
     if tag:
-        log.debug("Local variance is only computed"
-                  "for sources with a tag %s are"%
+        log.debug(" Local variance is only computed"
+                  " for sources with a tag %s are"%
                    tag)
         sources = filter(lambda src: src.getTag(tag), model.sources) 
     else:
@@ -376,15 +375,15 @@ def local_variance(imagedata, header, catalog, wcs=None,
                 sources.remove(src)
             m += 1
     if m > 0:
-        log.debug("It will be useful to increase the image size,"
-                  "sources with ra+step or dec+step > image size"
-                  "are removed")
+        log.debug(" It will be useful to increase the image size,"
+                  " sources with ra+step or dec+step > image size"
+                  " are removed. ")
         
     _std = []
     
     if neg_side:
         data = -data
-        log.debug("Using the negative side of the provided image.")
+        log.debug(" Using the negative side of the provided image. ")
  
     n = 0
     for (x, y), srs in zip(positions, sources):
@@ -404,9 +403,9 @@ def local_variance(imagedata, header, catalog, wcs=None,
                 srs.setAttribute("l", std)
         
     if n > 0:
-        log.debug("Nan encountered %d times. Increase the size of the"
-                  "region or check the image. Otherwise sources with"
-                  "0 or nan are flagged." %n)
+        log.debug(" Nan encountered %d times. Increase the size of the"
+                  " region or check the image. Otherwise sources with"
+                  " 0 or nan are flagged. " %n)
 
 
     def high_variance_sources(
@@ -499,30 +498,30 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs=None ,
         wcs = WCS(header, mode="pyfits")
 
     bmaj = int(round(beam/pixelsize))
-    log.info("Beam major= %d degrees"%bmaj)
+    log.info(" Beam major = %d pixels "%bmaj)
 
     if bmaj == 0:
-        log.debug("Beam major axis was read as 0, setting it to 1")
+        log.debug(" Beam major axis was read as 0, setting it to 1")
         bmaj = 1.0
 
     if not isinstance(corr_region, int):
         if isinstance(corr_region, float):
             corr_region = int(round(corr_region))
-            log.debug("Float is provided and int is required,"
-                      "arounding off to the nearest integer")
+            log.debug(" Floating point number was provided while an integer is required,"
+                      " arounding off to the nearest integer. ")
             if corr_region == 0:
-                log.error("Rounding off to 0. Provide an integer."
-                          "Aborting")
+                log.error(" Correlation region rounded off to 0. Provide an integer,"
+                          " not a floating point. Aborting ")
         else:
-            log.error("corr_region must be an integer. Abort")
+            log.error(" corr_region must be an integer. Abort ")
     
     step = corr_region * bmaj
     
     sources = []
 
     if tags:
-        log.debug("Only sources with tag %s will be correlated"
-                  "with the PSF"%tags)
+        log.debug(" Only sources with tag %s will be correlated "
+                  " with the PSF "%tags)
         sources = filter(lambda src: src.getTag(tags),model.sources) 
     else:
          for src in model.sources:
@@ -568,9 +567,9 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs=None ,
                 sources.remove(src)
             m += 1
     if m > 0:
-        log.debug("It will be useful to increase the image size,"
-                  "sources with ra+step or dec+step > image size"
-                  "are removed")
+        log.debug(" It will be useful to increase the image size,"
+                  " sources with ra+step or dec+step > image size"
+                  " were removed from the catalogue ")
 
     central = psf_hdr["CRPIX2"]
     psf_region = psf_data[central-step[0] : central+step[0],
@@ -584,6 +583,7 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs=None ,
                                 ra-step[1] : ra+step[1]].flatten()
         norm_data = (data_region-data_region.min())/(data_region.max()-
                                                      data_region.min())
+
         c_region = numpy.corrcoef((norm_data, psf_region))
         cf_region =  (numpy.diag((numpy.rot90(c_region))**2)
                                   .sum())**0.5/2**0.5
@@ -597,10 +597,10 @@ def psf_image_correlation(catalog, psfimage, imagedata, header, wcs=None ,
             corr.append(cf)
 
             if setatr:
-                src.setAttribute("cf",cf)
+                src.setAttribute("cf", cf)
 
     if n > 0:
-        log.debug("%d sources were removed due to 0/nan correlation"%n)
+        log.debug(" %d sources were removed due to 0/nan correlation "%n)
 
     thresh = thresh 
     coefftag = coefftag
@@ -617,7 +617,7 @@ def plot(pos, neg, rel=None, labels=None, show=False, savefig=None,
          prefix=None):
 
     log = logger(level=0, prefix=prefix)
-    log.info("Making Reliability plots")
+    log.info(" Making Reliability plots ")
  
     if not savefig:
         return
@@ -637,8 +637,8 @@ def plot(pos, neg, rel=None, labels=None, show=False, savefig=None,
     pylab.figure(figsize=(8*nplanes, 10*nplanes))
 
     if nneg < 5:
-        log.error("Few number of detections cant proceed plotting."
-                  "Aborting")        
+        log.error(" Few number of detections cant proceed plotting."
+                  " Aborting")        
         return 
 
     ##TODO: plots semi automated

@@ -71,11 +71,11 @@ class load(object):
         # reading the imagename data
         self.imagedata, self.wcs, self.header, self.pixsize =\
                           utils.reshape_data(self.imagename, prefix=self.prefix)
-        self.log.info("Loading image data")
+        self.log.info(" Loading image data")
 
         # computing the noise
         self.noise = utils.negative_noise(self.imagedata)
-        self.log.info("The negative noise of an image is %e"%
+        self.log.info(" The negative noise of an image is %e Jy/beam"%
                        self.noise)
 
         # tags
@@ -108,7 +108,7 @@ class load(object):
         sources = model.sources
             
         if self.noise == 0:
-            self.log.error("Division by 0. Aborting")
+            self.log.error(" Division by 0. Aborting")
 
         snr = [src.flux.I/self.noise for src in sources]
             
@@ -118,7 +118,7 @@ class load(object):
             if s > thresh:
                 srs.setTag(self.snr_tag, True)
                 n += 1
-        self.log.info("There are %d with high SNR"%n)
+        self.log.info(" There are %d number of sources with high SNR "%n)
         model.save(self.poscatalog)
 
 
