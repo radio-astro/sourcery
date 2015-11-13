@@ -22,7 +22,8 @@ class load(object):
                  psf_corr_region=2, local_var_region=10, rel_excl_src=None, 
                  pos_smooth=1.6, neg_smooth=1.6, loglevel=0, thresh_pix=5,
                  thresh_isl=3, neg_thresh_isl=3, neg_thresh_pix=5,
-                 prefix=None, do_nearsources=False, **kw):
+                 prefix=None, do_nearsources=False, increase_beam_cluster=False,
+                 **kw):
 
         """ Takes in image and extracts sources and makes 
             reliability estimations..
@@ -93,6 +94,10 @@ class load(object):
 
         savefits: boolean. Default is False.
             if True a negative image is saved.
+
+        increase_beam_cluster: boolean, optional. If True, sources
+            Gaussian groupings will be increase by 20%. If False,
+            the actual beam size will be used. Default is False.
    
          kw : kward for source extractions. Should be a mapping e.g
             kw['thresh_isl'] = 2.0 or kw['do_polarization'] = True 
@@ -148,6 +153,10 @@ class load(object):
                                self.imagename, self.imagedata,
                                self.header, self.prefix)
 
+        
+        # increase the beam by 20% on its major and minor axis
+        self.do_beam = increase_beam_cluster
+        
         # boolean optionals    
         self.makeplots = makeplots
         self.do_local_var = do_local_var
@@ -167,6 +176,12 @@ class load(object):
         self.thresh_pix = thresh_pix
         self.opts_pos = dict(thresh_pix=self.thresh_pix,
                              thresh_isl=self.thresh_isl)
+        if self.do_beam:
+            bmaj = self.header["BMAJ"]
+            bmin, bpa =  self.header["BMIN"], self.header["BPA"]
+            self.opts_pos["beam"] = (1.2*bmaj, 1.2*bmin, bpa)
+
+        
         self.opts_pos.update(kw)
         self.opts_neg = {}
         self.neg_thresh_isl = neg_thresh_isl

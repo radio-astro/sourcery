@@ -58,7 +58,7 @@ def main():
 
     add("-apsf", "--add-psfcorr", dest="add_psfcorr", action="store_true",
         default=False, help="Do and add correlation of the sources with the"
-        "PSF as an extra source parameter for reliability estimations.  The psf"
+        " PSF as an extra source parameter for reliability estimations.  The psf"
         " name must be provided. Default is False. To set true add -apsf")
 
     add("-alv", "--add-localvar", dest="add_locvar", action="store_true",
@@ -74,7 +74,12 @@ def main():
         " To disable add -dmp on the command line.")
  
     add("-rel", "--rel-thresh", dest="rel_thresh", default=None, type=float, 
-        help= "Set a reliability threshold. Default is None.")
+        help= "Sets a reliability threshold. Default is None.")
+
+    add("-beam", "--beam-cluster", dest="do_beam", default=False,
+        action="store_true", help= "Increases the Gaussian groupings by 20% of"
+        " the actual beam size obtained from the image Fits header."
+        " Default is False.")
  
     add("-pcr", "--psfcorr-region",  dest="psfcorr_region", type=int,
         default=5, help="Data size to correlate, given in beam sizes."
@@ -86,8 +91,8 @@ def main():
      
     add("-rel_rm", "--rel-sources-excl", dest="rel_src_excl", 
         action="append", default=None, help="Remove sources in a given"
-        "region to exclude in reliability estimations."
-        "E.g ra, dec, radius (in degrees). For more than"
+        " region to exclude in reliability estimations."
+        " E.g ra, dec, radius (in degrees). For more than"
         " one region: ra1,dec1,radius1:ra2,dec2,radius2. Default is None.")
 
     add("-ps", "--positive-smooth", dest="pos_smooth", type=float, default=1.6, 
@@ -96,7 +101,7 @@ def main():
 
     add("-ns", "--negative-smooth", dest="neg_smooth", type=float, default=0.8, 
         help="This is similar to -ps above but for negative side"
-        "of an image. Default is 0.8.")
+        " of an image. Default is 0.8.")
 
     add('-pisl', "--thresh-isl", dest="thresh_isl", type=float, default=3,
         help="Threshold for the island boundary in number of sigma above"
@@ -110,29 +115,29 @@ def main():
  
     add("-nisl", "--negthreshold-isl", dest="neg_thresh_isl",
         type=float, default=3, help="Similar to -pisl but applied"
-        "to the negative pixels. Default is 3.")
+        " to the negative pixels. Default is 3.")
 
     add("-npix", "--negthreshold-pix", dest="neg_thresh_pix",
         type=float, default=5, help="Similar to -ppix but applied"
-        "for negative pixels. Default is 5.")
+        " for negative pixels. Default is 5.")
 
     add("-snr_thr", "--snr-threshold", dest="snr_thresh", type=float,
         default=80, help="Signal-to-noise threshold with reference"
-        "to the minimum source flux in an image, e.g 80* min(snr), sources with"
+        " to the minimum source flux in an image, e.g 80* min(snr), sources with"
         " snr > than this are referred to high SNR sources."
         " Default is 80.")
 
     add("-loc_thr", "--localvar-threshold", dest="locvar_thresh",
         type=float, default=0.9, help="Local variance threshold."
-        "For -loc-thr of 0.9 means that"
+        " For -loc-thr of 0.9 means that"
         " sources with local variance > 0.9 * negative noise"
         " are considered sources of high local variance."
         " Default is 0.9")
 
     add("-pc_thr", "--psfcorr-threshold", dest="psfcorr_thresh", 
         type=float, default=0.5, help="Correlation factor threshold."
-        "Sources with threshold larger than the specified are"
-        "considered sources of high correlation. Default is 0.5.")    
+        " Sources with threshold larger than the specified are"
+        " considered sources of high correlation. Default is 0.5.")    
 
     add("-nneg", "--num-negatives",dest="num_negatives", type=float, default=8,
         help="Number of negative detections around a given source."
@@ -145,8 +150,8 @@ def main():
 
     add("-nphrm", "--phasecenter-remove", dest="phase_center_rm",
         type=float, default=None, help="The radius from the phase center"
-        "not to consider for final direction-dependent source selection."
-        "In beam sizes. Default is None.")
+        " not to consider for final direction-dependent source selection."
+        " In beam sizes. Default is None.")
 
     add('-jc', '--json-config', dest='config', default=None,
         help='Json config file : No default')
@@ -288,7 +293,8 @@ def main():
                      thresh_isl=args.thresh_isl, thresh_pix=args.thresh_pix,
                      neg_thresh_isl=args.neg_thresh_isl, neg_thresh_pix=
                      args.neg_thresh_pix, prefix=prefix,  
-                     do_nearsources=args.do_nearsources, **pybdsm_opts)
+                     do_nearsources=args.do_nearsources, increase_beam_cluster=
+                     args.do_beam, **pybdsm_opts)
 
             # assignign reliability values
             pos, neg = mc.get_reliability()
