@@ -176,10 +176,11 @@ class load(object):
         self.thresh_pix = thresh_pix
         self.opts_pos = dict(thresh_pix=self.thresh_pix,
                              thresh_isl=self.thresh_isl)
+        self.bmin, self.bpa =  self.header["BMIN"], self.header["BPA"]
+
         if self.do_beam:
             bmaj = self.header["BMAJ"]
-            bmin, bpa =  self.header["BMIN"], self.header["BPA"]
-            self.opts_pos["beam"] = (1.2*bmaj, 1.2*bmin, bpa)
+            self.opts_pos["beam"] = (1.2*bmaj, 1.2*self.bmin, self.bpa)
 
         
         self.opts_pos.update(kw)
@@ -263,13 +264,13 @@ class load(object):
             try:
                ex = numpy.rad2deg(src.get_attr("_pybdsm_Maj")) * 3600 
             except AttributeError:
-                ex = bmaj * 3600
-            ex = ex or bmaj * 3600
+                ex = self.bmaj * 3600
+            ex = ex or self.bmaj * 3600
             try:
                 ey = numpy.rad2deg(src.get_attr("_pybdsm_Min")) * 3600 
             except AttributeError:
-                ey = bmin * 3600
-            ey = ey or bmin * 3600
+                ey = self.bmin * 3600
+            ey = ey or self.bmin * 3600
             area = ex * ey * math.pi
 
             if self.do_local_var:
