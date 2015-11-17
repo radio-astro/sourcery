@@ -158,10 +158,10 @@ def main():
     
     add("-smp", "--save-posmask", dest="savemask_pos", action="store_true",
         default=False, help="If specified, the mask used on the positive"
-        "image data is saved.")
+        " image data is saved.")
     
     add("-smn", "--save-negmask", dest="savemask_neg", action="store_true",
-        default=False, help="Similar ot -smp, but applied of the negative image.")
+        default=False, help="Similar to -smp, but applied of the negative image.")
 
     args = parser.parse_args()
     
