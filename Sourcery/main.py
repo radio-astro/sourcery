@@ -77,7 +77,7 @@ def main():
         help= "Sets a reliability threshold. Default is None.")
 
     add("-beam", "--beam-cluster", dest="do_beam", default=False,
-        action="store_true", help= "Increases the Gaussian groupings by 20% of"
+        action="store_true", help= "Increases the Gaussian groupings by 20 percent of"
         " the actual beam size obtained from the image Fits header."
         " Default is False.")
  
