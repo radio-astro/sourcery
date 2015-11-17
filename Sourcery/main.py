@@ -155,6 +155,13 @@ def main():
 
     add('-jc', '--json-config', dest='config', default=None,
         help='Json config file : No default')
+    
+    add("-smp", "--save-posmask", dest="savemask_pos", action="store_true",
+        default=False, help="If specified, the mask used on the positive"
+        "image data is saved.")
+    
+    add("-smn", "--save-negmask", dest="savemask_neg", action="store_true",
+        default=False, help="Similar ot -smp, but applied of the negative image.")
 
     args = parser.parse_args()
     
@@ -294,7 +301,8 @@ def main():
                      neg_thresh_isl=args.neg_thresh_isl, neg_thresh_pix=
                      args.neg_thresh_pix, prefix=prefix,  
                      do_nearsources=args.do_nearsources, increase_beam_cluster=
-                     args.do_beam, **pybdsm_opts)
+                     args.do_beam, savemask_neg=args.savemask_neg,
+                     savemask_pos=args.savemask_pos, **pybdsm_opts)
 
             # assignign reliability values
             pos, neg = mc.get_reliability()

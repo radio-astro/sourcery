@@ -23,7 +23,7 @@ class load(object):
                  pos_smooth=1.6, neg_smooth=1.6, loglevel=0, thresh_pix=5,
                  thresh_isl=3, neg_thresh_isl=3, neg_thresh_pix=5,
                  prefix=None, do_nearsources=False, increase_beam_cluster=False,
-                 **kw):
+                 savemask_pos=False, savemask_neg=False, **kw):
 
         """ Takes in image and extracts sources and makes 
             reliability estimations..
@@ -98,6 +98,12 @@ class load(object):
         increase_beam_cluster: boolean, optional. If True, sources
             Gaussian groupings will be increase by 20%. If False,
             the actual beam size will be used. Default is False.
+
+        savemask_pos: boolean, optional. If true the mask applied on 
+            the positive side of an image after smoothing is saved.
+            
+        savemask_neg: Similar to savemask_pos but for the negative
+            side of an image.
    
          kw : kward for source extractions. Should be a mapping e.g
             kw['thresh_isl'] = 2.0 or kw['do_polarization'] = True 
@@ -120,8 +126,9 @@ class load(object):
 
         self.log.info(" Loading the image data")
 
- 
-
+        self.savemaskpos = savemask_pos
+        self.savemaskneg = savemask_neg
+      
         # reading imagename data
         self.imagedata, self.wcs, self.header, self.pixelsize =\
             utils.reshape_data(self.imagename, prefix=self.prefix)
@@ -192,8 +199,8 @@ class load(object):
 
 
 
-    def source_finder(self, image=None, thresh=None,
-                      noise=None, lsmname=None, **kw):
+    def source_finder(self, image=None, thresh=None, prefix=None,
+                      noise=None, lsmname=None, savemask=None, **kw):
         
         #TODO look for other source finders and how they operate
          
@@ -209,7 +216,8 @@ class load(object):
         mask, noise = utils.thresh_mask(
                           image, tpos.name,
                           thresh=thresh, noise=self.noise, 
-                          sigma=True, smooth=True)
+                          sigma=True, smooth=True, prefix=prefix, 
+                          savemask=savemask)
 
         lsmname = lsmname or self.poslsm
         # source extraction
@@ -317,10 +325,12 @@ class load(object):
         self.log.info(" Extracting the sources on both sides ")
         
         self.source_finder(image=self.imagename, lsmname=self.poslsm, 
-                           thresh=self.pos_smooth, **self.opts_pos)
+                           thresh=self.pos_smooth, savemask=self.savemaskpos,
+                           prefix=self.prefix, **self.opts_pos)
 
         self.source_finder(image=self.negativeimage, lsmname=self.neglsm,
-                           thresh=self.neg_smooth, **self.opts_neg)
+                           thresh=self.neg_smooth, savemask=self.savemaskneg,
+                           prefix=self.prefix+"-neg", **self.opts_neg)
 
         self.log.info(" Source Finder completed successfully ")
 

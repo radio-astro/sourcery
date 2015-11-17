@@ -114,7 +114,8 @@ def invert_image(image, data, header, prefix=None):
 
 
 def thresh_mask(imagename, outname, thresh, 
-                noise=None, sigma=False, smooth=None):
+                noise=None, sigma=False, smooth=None,
+                prefix=None, savemask=False):
     """ Create a threshhold mask """
 
     hdu = pyfits.open(imagename)
@@ -154,6 +155,12 @@ def thresh_mask(imagename, outname, thresh,
     
     hdu[0].data *= (mask==False)
     hdu.writeto(outname, clobber=True)
+    if savemask:
+        mask = (mask== False) * 1 
+        ext = fits_ext(imagename)
+        outmask = prefix + "-mask.fits" or  imagename.replace(ext,"-mask.fits")
+        pyfits.writeto(outmask, mask, hdr, clobber=True)
+        return mask, noise
 
     return mask==False, noise
 
