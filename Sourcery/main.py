@@ -321,4 +321,4 @@ def main():
             # tagging
                 ppose, nneg = dc.source_selection()
 
-    os.system("rm -r *.pybdsm.log")
+    os.system("rm -r tmp*.log")
