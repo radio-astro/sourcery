@@ -248,8 +248,8 @@ def main():
                     os.system("tigger-convert --select='rel>%.3f' %s %s -f"
                               %(args.rel_thresh, pos, pos))
 
-                if enable and args.psf:
-                    dc = dd.load(image, psf, **ddict)
+                if enable:
+                    dc = dd.load(image, psfname=psf, **ddict)
                     ppos, nneg = dc.source_selection()
 
         else:
@@ -269,8 +269,8 @@ def main():
                 os.system("tigger-convert --select='rel>%.3f' %s %s -f"
                          %(args.rel_thresh, pos, pos))
 
-            if enable and psf:
-                dc = dd.load(image, psf, **ddict)
+            if enable:
+                dc = dd.load(image, psfname=psf, **ddict)
                 ppos, nneg = dc.source_selection()
         
     else:
@@ -310,15 +310,15 @@ def main():
                 os.system("tigger-convert --select='rel>%.3f' %s %s -f"
                          %(args.rel_thresh, pos, pos))
             # direction dependent detection tagging
-            if args.psf:
-                dc = dd.load(imagename=image, psfname=psf, poscatalog=pos, negcatalog=neg,
-                           snr_thresh=args.snr_thresh, local_thresh=args.locvar_thresh,
-                           local_region=locregion, psfcorr_region=psfregion, 
-                           high_corr_thresh=args.psfcorr_thresh, negdetec_region=
-                           args.neg_region, negatives_thresh=args.num_negatives,
-                           phasecenter_excl_radius=args.phase_center_rm, prefix=prefix,
-                           loglevel=args.log_level)
+            
+            dc = dd.load(imagename=image, psfname=psf, poscatalog=pos, negcatalog=neg,
+                    snr_thresh=args.snr_thresh, local_thresh=args.locvar_thresh,
+                    local_region=locregion, psfcorr_region=psfregion, 
+                    high_corr_thresh=args.psfcorr_thresh, negdetec_region=
+                    args.neg_region, negatives_thresh=args.num_negatives,
+                    phasecenter_excl_radius=args.phase_center_rm, prefix=prefix,
+                    loglevel=args.log_level)
             # tagging
-                ppose, nneg = dc.source_selection()
+            ppose, nneg = dc.source_selection()
 
     os.system("rm -r tmp*.log")

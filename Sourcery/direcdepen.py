@@ -13,7 +13,7 @@ import numpy
 class load(object):
 
 
-    def __init__(self, imagename, psfname, poscatalog, negcatalog,
+    def __init__(self, imagename, poscatalog, negcatalog, psfname=None,
                  snr_thresh=100, local_thresh=0.6, local_region=10,
                  psfcorr_region=2, high_corr_thresh=0.5, negdetec_region=10, 
                  negatives_thresh=10, phasecenter_excl_radius=None,
@@ -60,13 +60,17 @@ class load(object):
         """
 
         # image, psf image, positive and negative catalogues
-        self.imagename = imagename
-        self.psfname = psfname
-        self.poscatalog = poscatalog
-        self.negcatalog = negcatalog
         self.loglevel = loglevel
         self.prefix = prefix
         self.log = utils.logger(self.loglevel, prefix=self.prefix)
+        self.imagename = imagename
+
+        self.psfname = psfname
+        if not self.psfname:
+            self.log.info("dE tagging will be made without the PSF correlation"
+                    " note that this might affect the results.")
+        self.poscatalog = poscatalog
+        self.negcatalog = negcatalog
         
         # reading the imagename data
         self.imagedata, self.wcs, self.header, self.pixsize =\
@@ -126,8 +130,12 @@ class load(object):
         
         pmodel = Tigger.load(self.poscatalog, verbose=self.loglevel)
         nmodel = Tigger.load(self.negcatalog, verbose=self.loglevel)
-        psources = pmodel.sources 
-        sources = filter(lambda src: src.getTag(self.high_corr_tag), psources)
+        psources = pmodel.sources
+        if not self.psfname:
+            sources = filter(lambda src: src.getTag(self.high_local_tag), psources)
+            
+        else:    
+            sources = filter(lambda src: src.getTag(self.high_corr_tag), psources)
 
         tolerance = numpy.deg2rad(self.negdetec_region * self.bmaj_deg)
 
@@ -158,13 +166,14 @@ class load(object):
              high_local_tag=self.high_local_tag, neg_side=True,
              setatr=False, prefix=self.prefix, do_high_loc=True)
         # correlation
-        utils.psf_image_correlation(
-            catalog=self.poscatalog, psfimage=self.psfname,
-            imagedata=self.imagedata, header=self.header,
-            wcs=self.wcs, pixelsize=self.pixsize, corr_region=
-            self.psfcorr_region, thresh=self.high_corr_thresh,
-            tags=self.high_local_tag, coefftag=self.high_corr_tag,
-            setatr=False, do_high=True, prefix=self.prefix)
+        if self.psfname:
+            utils.psf_image_correlation(
+                catalog=self.poscatalog, psfimage=self.psfname,
+                imagedata=self.imagedata, header=self.header,
+                wcs=self.wcs, pixelsize=self.pixsize, corr_region=
+                self.psfcorr_region, thresh=self.high_corr_thresh,
+                tags=self.high_local_tag, coefftag=self.high_corr_tag,
+                setatr=False, do_high=True, prefix=self.prefix)
         # number of negative detections
         self.number_negatives()
 
