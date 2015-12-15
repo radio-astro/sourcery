@@ -1,0 +1,16 @@
+language: python
+sudo: false
+python:
+- '2.7'
+install:
+- python setup.py install
+script:
+- true
+deploy:
+  provider: pypi
+  user: gijzelaerr
+  password:
+    secure: VWyae9s3GPw7nL9J5G82DsW+8Qp/26GCyWKUbCBUuNoL5uWXRFk5Hz5sCbxYJwQU7iGKe6Ms948XaoB4PNOdIqzS19r+HfFbeP++J3mur6QjKG4qVm5xgggE+pJHigDRKYDSdYd/LaX4rqKYbhvJMQ6DXD90VMuboNXvTMD6yH8xxCDtl2/HlPfmYu9+z6alc9cknNGYz3KvMPGtv3zyZfwQ/yHffAuRjXdufMti/tCDNLdQFEwCELUQklTsrVuUS1UIr3FuWwLZQenGRaE342MRvhKbX7Iz4/LxbLKb9V7Ifp76k78xaEQ57HFKw1ZICZegPEDo/rpy2IZVfh3me49MIZJs8qNvTvUfcZ9tgvTZS2fpyxGkxw1RaiDIjpPD7YRssglHbZE4kUhzkC3/k1n8OwTerhVZ/g2Q//FmAFf3l5lp0/UI7CH8zv8wJU4Szlm9I0eMBaccAKdduDlhu+bdOdMpm1/BkYBimkeA1RmlJTZ+GkaHRC1uz6YKA0Ilk+8eibGeZCuUtFzvi5rnapa0o09N8q5PwQaY7b3ugZZ0fPALcLNJMDFgupmynqo8ACd99DLRquZP89PhfJAy2tYEXdV1kz/K/lt6zlliKv3G8iCMM2RhqDrMBTJ6zbGXJiPvFTgAE/5YuhNTzazKCnBbDdMQXA19uGr0sVGripI=
+  on:
+    tags: true
+    repo: radio-astro/sourcery
