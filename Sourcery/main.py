@@ -250,7 +250,7 @@ def main():
 
                 if enable:
                     dc = dd.load(image, psfname=psf, **ddict)
-                    ppos, nneg = dc.source_selection()
+                    ppos  = dc.source_selection()
 
         else:
 
@@ -271,7 +271,7 @@ def main():
 
             if enable:
                 dc = dd.load(image, psfname=psf, **ddict)
-                ppos, nneg = dc.source_selection()
+                ppos = dc.source_selection()
         
     else:
         # reliability
@@ -319,6 +319,6 @@ def main():
                     phasecenter_excl_radius=args.phase_center_rm, prefix=prefix,
                     loglevel=args.log_level)
             # tagging
-            ppose, nneg = dc.source_selection()
+            ppose = dc.source_selection()
 
     os.system("rm -r tmp*.log")
