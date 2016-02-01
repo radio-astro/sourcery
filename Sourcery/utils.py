@@ -21,7 +21,6 @@ from scipy import stats
 
 matplotlib.rcParams.update({'font.size': 12})
 
-# provides logging
 def logger(level=0, prefix=None):
     
     if not prefix:
@@ -42,7 +41,6 @@ def logger(level=0, prefix=None):
 
 
 
-# Reshapes the data
 #-----------------------knicked from Stats.py------------------------------- 
 def reshape_data (image, prefix=None):
 
@@ -96,7 +94,6 @@ def reshape_data (image, prefix=None):
     return data, wcs, hdr, pixel_size
 
 
-# computes the negative noise.
 def negative_noise(data):
 
     """ Computes the image noise using the negative pixels """
@@ -107,30 +104,132 @@ def negative_noise(data):
     return noise
 
 
-# inverts the image
-def invert_image(imagename, data, header, prefix=None):
+def invert_image(image, data, header, prefix=None):
     
-    ext = fits_ext(imagename)
-    output = prefix + "_negatives.fits" or imagename.replace(ext,"_negative.fits")
+    ext = fits_ext(image)
+    output = prefix + "_negatives.fits" or image.replace(ext,"_negative.fits")
     newdata = -data
     pyfits.writeto(output, newdata, header, clobber=True)
     return output
 
 
+def thresh_mask(imagename, outname, thresh, 
+                noise=None, sigma=False, smooth=None,
+                prefix=None, savemask=False):
+    """ Create a threshhold mask """
 
-# returns two coloum data
-def image_twobytwo(data, hdr=None, prefix=None):
-     
-     log = logger(level=0, prefix=prefix)
-     ndim = hdr["NAXIS"] or len(data.shape)
-     if ndim == 4:
-         return data[0,0,...]
-     elif ndim == 3:
-          return data[0,...]
-     elif ndim == 2:
-          return data[...]
-     else:
-         log.error(" FITS file has more than 4 or less than two axes. Aborting")
+    hdu = pyfits.open(imagename)
+    hdr = hdu[0].header
+    
+    ndim = hdr["NAXIS"] 
+    imslice = [0] * ndim
+    imslice[-2:] = [slice(None)] * 2
+    data = hdu[0].data[imslice].copy()
+
+    # If smooth is not specified, use a fraction of the beam
+    
+    if sigma:
+        noise = noise or negative_noise(data)
+    else:
+        noise = 1
+
+    thresh = thresh * noise
+    
+    mask = numpy.ones(data.shape)
+
+    if smooth:
+        emin = hdr["BMIN"]
+        emaj = hdr["BMAJ"]
+        cell = abs(hdr["CDELT1"])
+        beam = math.sqrt(emin*emaj)/cell
+        scales = [.1, 2, 5.0, 10., 20, 40.]#, 4., 8., 16.]
+        smooth = None
+        for scale in scales: 
+            kk = scale * beam
+            smooth = filters.gaussian_filter(
+                       data if smooth is None else 
+                       smooth, [kk,kk])
+            mask *= smooth < thresh
+    else:
+        mask = data < thresh
+    
+    hdu[0].data *= (mask==False)
+    hdu.writeto(outname, clobber=True)
+    if savemask:
+        mask = (mask== False) * 1 
+        ext = fits_ext(imagename)
+        outmask = prefix + "-mask.fits" or  imagename.replace(ext,"-mask.fits")
+        pyfits.writeto(outmask, mask, hdr, clobber=True)
+        return mask, noise
+
+    return mask==False, noise
+
+
+def sources_extraction(image, output=None,
+                       sourcefinder_name="pybdsm",
+                       prefix=None, **kw):
+
+
+    """Runs pybdsm on the specified 'image', converts the 
+       results into a Tigger model and writes it to output.
+
+    image :  Fits image data
+    output : Tigger format, default image name.lsm.html
+        A Catalog name to store the extracted sources
+    """
+    
+    ext = fits_ext(image)
+    output = output or image.replace(ext, ".lsm.html")
+    gaul = output + ".gaul"
+    # start with default PYBDSM options
+    opts = {}
+    opts.update(kw)
+
+    log = logger(level=0, prefix=prefix)     
+
+    if sourcefinder_name.lower() == "pybdsm":
+        from lofar import bdsm
+        img = bdsm.process_image(image, group_by_isl=True, **kw)
+        img.write_catalog(outfile=gaul, format="ascii", 
+                          catalog_type="gaul", clobber=True)
+
+
+    # converting the model to Tigger
+    tc = ["tigger-convert", gaul, output,
+          "-t","Gaul","-f","--rename","-o","Tigger"]
+
+    process = subprocess.Popen([" ".join(["%s"%item for item in tc])],
+                  stderr = subprocess.PIPE if not isinstance(sys.stderr,
+                        file) else sys.stderr,
+                  stdout = subprocess.PIPE if not isinstance(sys.stdout,
+                        file) else sys.stdout,
+                  shell=True)
+
+    if process.stdout or process.stderr:
+        out,err = process.comunicate()
+        sys.stdout.write(out)
+        sys.stderr.write(err)
+        out = None
+    else:
+        process.wait()
+    if process.returncode:
+        log.error(" tigger-convert returns errr code %d"%
+                 (process.returncode))
+    else:
+        log.info(" DONE: tigger-convert succeeded catalog is %s"%output)
+        verifyModel(output)
+
+
+
+#---------------------------------------------------------------------------------------
+def verifyModel(lsm):
+    ##TODO temporary
+    model = Tigger.load(lsm)
+    zeroflux = filter(lambda a: (a.flux.I or a.brightness())==0,
+                      model.sources)
+    for s in zeroflux:
+        model.sources.remove(s)
+    model.save(lsm)
 
 
 
@@ -148,184 +247,379 @@ class gaussian_kde_set_covariance(stats.gaussian_kde):
 #---------------------------------------------------------------------------
 
 
-# takes the extension of a file
 def fits_ext(fitsname):
     ext = fitsname.split(".")[-1]
     return ext
 
 
-# Does the smoothing
-def thresh_mask(imagename, imagedata, output, hdr, thresh, 
-                noise=None, sigma=False, smooth=None,
-                prefix=None, savemask=False):
-    """ Create a threshhold mask """
+def local_variance(imagedata, header, catalog, wcs=None,
+                   pixelsize=None, tag=None,local_region=5,
+                   noise=None, savefig=True, highvariance_factor=0.8,
+                   high_local_tag=None, neg_side=False, 
+                   setatr=True, do_high_loc=False, prefix=None):
 
-    #hdu = pyfits.open(imagename)
-    #hdr = hdu[0].header
-    
-    ndim = hdr["NAXIS"] 
-    imslice = [0] * ndim
-    imslice[-2:] = [slice(None)] * 2
-    data = imagedata[imslice].copy()
-    
-    
-    # If smooth is not specified, use a fraction of the beam
-    
-    if sigma:
-        noise = noise or negative_noise(data)
-    else:
-        noise = 1
+    """ Calculates the local varience (lv) around a source on 
+        one side of interest. 
+ 
+    imagedata : Reshaped Fits data
+    header : Image header
+    catalog : Source catalog, in Tigger format.
+        Source model to compute local variance around.
 
-    thresh = thresh * noise
-    
-    mask = numpy.ones(data.shape)
+    tag : str, optional.
+        if specified then the local variance will be
+        computed for only a subset of sources with a tag,
+        e.g., 'tag=snr'.
+    header : Fits header e.g., img=pyfits.open("test.fits")
+        header=img[0].header
+    wcs :This class provides methods
+        for accessing information from the World  Coordinate System
+        (WCS) contained in the header of a FITS image. Conversions 
+        between pixel and WCS coordinates can also be performed.
+        If not provided it is directly obtained from the Fits header
+        provided.
+    pixelsize: float, Default is None.
+         If not provided then it is directly obtained form a Fits header.
+    local_region: int, optional. A default value of 5. 
+        Gives a region to compute the local variance in
+        psf sizes, e.g, 'local_region = 2',
+        then a region (= 2 * beam size) around a source is used.
 
-    if smooth:
-        emin = hdr["BMIN"]
-        emaj = hdr["BMAJ"]
-        cell = abs(hdr["CDELT1"])
-        beam = math.sqrt(emin*emaj)/cell
-        scales = [0.1, 2.0, 5.0, 10.0, 20.0, 40.0]#, 60.0]
-        smooth = None
-        for scale in scales: 
-            kk = scale * beam
-            smooth = filters.gaussian_filter(
-                       data if smooth is None else 
-                       smooth, [kk,kk])
-            mask *= smooth < thresh
-    else:
-        mask = data < thresh
-    
-    imagedata *= (mask==False)
-    pyfits.writeto(output, imagedata, hdr, clobber=True)
-    if savemask:
-        mask = (mask== False) * 1 
+    highvariance_factor: float, optional. A default value of 0.8. 
+        If highvariance_factor=0.8 is given this means that
+        the sources with local variance greater than  
+        0.8*image_noise will be tagged 'high_var' if
+        high_local_tag=None.
 
-        ext = fits_ext(imagename)
-        outmask = prefix + "-mask.fits" #or  imagename.replace(ext,"-mask.fits")
-        pyfits.writeto(outmask, mask, hdr, clobber=True)
-        return mask, noise
+    high_local_tag : str, optional. A default tag None.
+        Tag assigned to sources of high local variance.
+        If None is provided the default tag will be used
+        i.e 'high_var'. Else it uses the specified tag.
 
-    return mask==False, noise
+    setatr : bool, optional. Default is True.
+        If True all sources will be tagged with 'l'
+        giving each detection an extra local variance
+        parameter.
 
-
-
-# source extraction. Works with Gaul in ,fits form
-def sources_extraction(image, output=None,
-                       sourcefinder_name="pybdsm",
-                       prefix=None, **kw):
-
-
-    """Runs pybdsm on the specified 'image', converts the 
-       results into a Tigger model and writes it to output.
-
-    image :  Fits image data
-    output : Tigger format, default image name.lsm.html
-        A Catalog name to store the extracted sources
+    do_high_loc : bool, optional. Default is False.
+        If True sources with high local variance will be tagged
+        using 'localvariance_tag' (see above).
+    prefix :  str, optional. Default is None.
     """
+
+    data = imagedata
+    beam = header["BMAJ"]
+
+    if pixelsize is None:
+        pixelsize = abs(header["CDELT1"])
+    if wcs is None:
+        wcs = WCS(header, mode="pyfits")
+
+    bmaj = int(round(beam/pixelsize)) # beam size in pixels
+
+    log = logger(level=0, prefix=prefix)
+    if not isinstance(local_region, int):
+        if isinstance(local_region, float):
+            local_region = int(round(local_region))
+            log.debug(" A floating point had been provided while an integer is required,"
+                      " arounding off to the nearest integer.")
+            if local_region == 0:
+                log.error(" The local variane region had rounded off to 0,"
+                          " change local_region into an integer."
+                          " Aborting ")
+        else:
+            log.error(" local_region must be an integer. Abort ")
     
-    ext = fits_ext(output)
-    #fitsfile = output.replace(ext,"fits")
+    step = local_region * bmaj
 
-    # start with default PYBDSM options
-    opts = {}
-    opts.update(kw)
+    noise = noise or negative_noise(data)
+    
+    model = Tigger.load(catalog)
+    sources = []
 
-    log = logger(level=0, prefix=prefix)     
+    if tag:
+        log.debug(" Local variance is only computed"
+                  " for sources with a tag %s are"%
+                   tag)
+        sources = filter(lambda src: src.getTag(tag), model.sources) 
+    else:
+        for src in model.sources:
+            sources.append(src)
+    
+    positions_sky = [map(lambda rad: numpy.rad2deg(rad),
+                    (src.pos.ra,src.pos.dec)) for src in sources]
+    positions = [wcs.wcs2pix(*pos) for pos in positions_sky]
 
-    if sourcefinder_name.lower() == "pybdsm":
-        from lofar import bdsm
-        img = bdsm.process_image(image, group_by_isl=True, **kw)
-        img.write_catalog(outfile=output, format="fits", 
-                          catalog_type="gaul", clobber=True)
-    return output
-
-
-# checks for sources with 0 flux and 
-# correlaion of 1.2, these are the sources that at
-# nan or 0 as their correlation value. 
-
-def verifyModel(model, lsm, do_psf=None):
-    """Removes sources with 0 flux"""
+    shape = data.shape 
+    ndim = len( data.shape)
+    if ndim == 4:
+        data = data[0,0,...]
+    if ndim == 3:
+        data = data[0,...]
  
+    step = [step, step]
     
-    zeroflux = filter(lambda a: (a.flux.I or a.brightness())==0,
-                      model.sources)
-    for s in zeroflux:
-        model.sources.remove(s)
-    if do_psf: 
-        for s in model.sources:
-            cf = s.cf
-            if cf == 1.2:
-                model.sources.remove(s)
+    m = 0 
+    for i, (pos, src) in enumerate(zip(positions, sources)):
+        x,y = pos
+        if x>shape[-2] or y>shape[-1] or numpy.array(pos).any()<0:
+            positions.remove(pos)
+            model.sources.remove(src)
+            sources.remove(src)
+            m += 1
 
+        if (y+step[1] > shape[-1]) or (y-step[1] < 0):
+            if pos in positions:
+                positions.remove(pos)
+                model.sources.remove(src)
+                sources.remove(src)
+            m += 1
 
-# computes the locala variance
-def compute_local_variance(imagedata, pos, step):
-
-    # ra, dec is in pixel size.
-    x, y = pos
-    subrgn = imagedata[y-step : y+step, x-step : x+step]
-    subrgn = subrgn[subrgn > 0]
-    std = subrgn.std()
-    return std
-
-
-# plots for local variance but yet put to work.
-def plot_local_variance(modellsm, noise, prefix, threshold):
-
-    model = Tigger.load(modellsm, verbose=False)
-    savefig = prefixx + "_variance.png"
-    local = [(src.l/1.0e-6) for src in model.sources]
-    pylab.figure()
-    pylab.plot([noise/1.0e-6] * len(local))
-    x = numpy.arange(len(local))
-    pylab.plot(x, local)
-    for i, src in enumerate(model.sources):
-        if local[i] > threshold * noise:
-            pylab.plot(x[i], local[i], "rD")
-            pylab.annotate(src.name, xy=(x[i], local[i]))
-
-    pylab.ylabel("Local variance[$\mu$]")
-    pylab.savefig(savefig)
-
-
-# opens the psf image
-def open_psf_image(psfimage):
-    psf = pyfits.open(psfimage)
-    psfdata, psfhdr = psf[0].data, psf[0].header
-    return psfdata, psfhdr
+        if (x+step[0] > shape[-2]) or (x-step[0] < 0):
+            if pos in positions:
+                positions.remove(pos)
+                model.sources.remove(src)
+                sources.remove(src)
+            m += 1
+    if m > 0:
+        log.debug(" It will be useful to increase the image size,"
+                  " sources with ra+step or dec+step > image size"
+                  " are removed. ")
+        
+    _std = []
     
-
-#computes the correlation factor
-def compute_psf_correlation(imagedata, psfdata, psfhdr, pos,  step=None):
-
-    """Computes PSF correlation.
+    if neg_side:
+        data = -data
+        log.debug(" Using the negative side of the provided image. ")
  
-    model: Takes a sky model
-    src: a source in question
-    imagedata:  Takes image data already in 2 * 2.
-    
-    """   
-    
-    c0 = psfhdr["CRPIX2"] 
-    
-    ra0, dec0 = pos
-    psf_region  = psfdata[c0-step: c0+step, c0-step : c0+step].flatten()
-    data_region = imagedata[dec0-step : dec0+step, ra0-step:ra0+step].flatten()
-    
-    norm_data = (data_region-data_region.min())/(data_region.max()-
-                                                 data_region.min())
+    n = 0
+    for (x, y), srs in zip(positions, sources):
+        pos = [x,y]
+        subrgn = data[y-step[0] : y+step[0], x-step[1] : x+step[1]]
+        subrgn = subrgn[subrgn > 0]
+        std = subrgn.std()
 
-    c_region = numpy.corrcoef((norm_data, psf_region))
-    cf =  (numpy.diag((numpy.rot90(c_region))**2)
+        if math.isnan(float(std)) or _std == 0:
+            sources.remove(srs)
+            model.sources.remove(srs)
+            positions.remove(srs)
+            n += 1
+        else:
+            _std.append(std)
+            if setatr:
+                srs.setAttribute("l", std)
+        
+    if n > 0:
+        log.debug(" Nan encountered %d times. Increase the size of the"
+                  " region or check the image. Otherwise sources with"
+                  " 0 or nan are flagged. " %n)
+
+
+    def high_variance_sources(
+            pos, local_variance, noise, model, threshold,
+            savefig=savefig, prefix=None, localtag=None):
+
+        if savefig:
+            save_fig = prefix + "_variance.png" or catalog.replace(
+                                                      ".lsm.html", ".png")
+
+        local = [l/1.0e-6 for l in local_variance]
+        x = numpy.arange(len(pos))
+        pylab.figure()
+        pylab.plot(x, local)
+        pylab.plot([noise/1.0e-6] * len(local_variance))
+
+        localtag = localtag     
+        for i, (pos, src) in enumerate(zip( pos, model.sources)):
+            if _std[i] > threshold:
+                src.setTag(localtag, True)
+                pylab.plot(x[i], local[i], "rD")
+                pylab.annotate(src.name, xy=(x[i],local[i]))
+        if savefig:
+            pylab.ylabel("local variance[$\mu$]")
+            pylab.savefig(save_fig)
+
+    if high_local_tag is None:
+         high_local_tag = "high_var"
+    if do_high_loc:
+        threshold = highvariance_factor * noise
+        high_variance_sources(positions, _std, noise, model,
+                              threshold=threshold, savefig=savefig,
+                              prefix=prefix, localtag=high_local_tag)
+    model.save(catalog)   
+
+    return _std 
+
+
+def psf_image_correlation(catalog, psfimage, imagedata, header, wcs=None ,
+                     pixelsize=None, corr_region=5, thresh=0.4, tags=None,
+                     coefftag='high_corr', setatr=True, do_high=False, 
+                     prefix=None):
+
+
+    """ Computes correlation of the image and PSF image
+
+    catalog : Source model, Tigger format.
+    psfimage : Instrument's Point spread functions Fits data.
+    imagedata : Fits data
+    header : Fits header e.g., img=pyfits.open("test.fits")
+        header=img[0].header
+    wcs :This class provides methods
+        for accessing information from the World  Coordinate System
+        (WCS) contained in the header of a FITS image. Conversions 
+        between pixel and WCS coordinates can also be performed.
+        If not provided it is directly obtained from the Fits header
+        provided.
+    pixelsize: float, Default is None.
+         If not provided then it is directly obtained form a Fits header.
+    corr_region : int, optional. A default value of 5.
+        The size of the region to correlate given in beam sizes.
+    thresh : float, optional. A default value of 0.4. 
+        Correlation threshold. Sources with correlation > threshold
+        are sources with high correlation.
+    tags: str, optional. Default is None.
+        If specified only sources with 'Tag' will be evaluated.
+    coefftag: str, optional. A Default string is 'high_corr'.
+        If provided sources with correlation > thresh will be tagged
+        using the user specified tag.
+    setatr : bool, optional. Default is True.
+        If True all sources will be tagged with 'cf'
+        giving each detection an extra correlation with PSF parameter.
+    do_high: bool, optional.  Default is False.
+        If True, sources of high correlation are tagged using 'coefftag',
+        if False no tagging will be made.
+    """
+
+    model = Tigger.load(catalog)
+   
+    image_data = imagedata 
+    beam = header["BMAJ"]
+    psf_data, wcs_psf, psf_hdr, psf_pix = reshape_data(image=psfimage)
+    
+    shape = image_data.shape
+    log = logger(level=0, prefix=prefix)
+
+    if pixelsize is None:
+        pixelsize = abs(header["CDELT1"])
+    if wcs is None:
+        wcs = WCS(header, mode="pyfits")
+
+    bmaj = int(round(beam/pixelsize))
+    log.info(" Beam major = %d pixels "%bmaj)
+
+    if bmaj == 0:
+        log.debug(" Beam major axis was read as 0, setting it to 1")
+        bmaj = 1.0
+
+    if not isinstance(corr_region, int):
+        if isinstance(corr_region, float):
+            corr_region = int(round(corr_region))
+            log.debug(" Floating point number was provided while an integer is required,"
+                      " arounding off to the nearest integer. ")
+            if corr_region == 0:
+                log.error(" Correlation region rounded off to 0. Provide an integer,"
+                          " not a floating point. Aborting ")
+        else:
+            log.error(" corr_region must be an integer. Abort ")
+    
+    step = corr_region * bmaj
+    
+    sources = []
+
+    if tags:
+        log.debug(" Only sources with tag %s will be correlated "
+                  " with the PSF "%tags)
+        sources = filter(lambda src: src.getTag(tags),model.sources) 
+    else:
+         for src in model.sources:
+             sources.append(src)
+    
+    positions_sky = [map(lambda rad: numpy.rad2deg(rad),
+                    (src.pos.ra, src.pos.dec))  for src in sources]
+    pos = [wcs.wcs2pix(*pos) for pos in positions_sky]
+
+    step = [step,step]
+    ndim = len(shape)
+    if ndim == 4:
+        image_data = image_data[0,0,...]
+    if ndim == 3:
+        image_data = image_data[0,...]
+
+    pdim = len(psf_data.shape)
+    if pdim == 4:
+        psf_data = psf_data[0,0,...]
+    if pdim == 3:
+        psf_data = psf_data[0,...]
+  
+    
+    m = 0
+    for i, (p, src) in enumerate(zip(pos, sources)):      
+        x,y = p
+        if x>shape[-2] or y>shape[-1] or numpy.array(p).any()<0:
+            pos.remove(p)
+            sources.remove(src)
+            model.sources.remove(src)
+            m += 1
+
+        if (y+step[1] > shape[-1]) or (y-step[1] < 0):
+            if p in pos:
+                pos.remove(p)
+                model.sources.remove(src)
+                sources.remove(src)
+            m += 1
+        if (x+step[0] > shape[-2]) or (x-step[0] < 0):
+            if p in pos:
+                pos.remove(p)
+                model.sources.remove(src)
+                sources.remove(src)
+            m += 1
+    if m > 0:
+        log.debug(" It will be useful to increase the image size,"
+                  " sources with ra+step or dec+step > image size"
+                  " were removed from the catalogue ")
+
+    central = psf_hdr["CRPIX2"]
+    psf_region = psf_data[central-step[0] : central+step[0],
+                 central-step[1] : central+step[1]]
+    psf_region = psf_region.flatten()
+     
+    corr = []
+    n = 0
+    for src, (ra, dec) in zip(sources, pos): 
+        data_region = image_data[dec-step[0] : dec+step[0],
+                                ra-step[1] : ra+step[1]].flatten()
+        norm_data = (data_region-data_region.min())/(data_region.max()-
+                                                     data_region.min())
+
+        c_region = numpy.corrcoef((norm_data, psf_region))
+        cf_region =  (numpy.diag((numpy.rot90(c_region))**2)
                                   .sum())**0.5/2**0.5
-    
-    
-    return cf 
+        cf = cf_region
+
+        if math.isnan(float(cf)) or cf == 0:
+            model.sources.remove(src)
+            sources.remove(src)
+            n += 1
+        else:
+            corr.append(cf)
+
+            if setatr:
+                src.setAttribute("cf", cf)
+
+    if n > 0:
+        log.debug(" %d sources were removed due to 0/nan correlation "%n)
+
+    thresh = thresh 
+    coefftag = coefftag
+    if do_high:
+        for src, crr in zip(sources, corr):
+            if crr > thresh:
+               src.setTag(coefftag, True)
+    model.save(catalog)     
+
+    return corr
 
 
-# plots the parameter space
 def plot(pos, neg, rel=None, labels=None, show=False, savefig=None,
          prefix=None):
 

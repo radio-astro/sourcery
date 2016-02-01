@@ -10,12 +10,9 @@ import numpy
 import tempfile
 import Tigger 
 import pylab
+
 import os
 import math
-from Tigger.Models import SkyModel, ModelClasses
-import pyfits
-from Tigger.Coordinates import angular_dist_pos_angle as dist
-
 
 class load(object):
 
@@ -120,13 +117,8 @@ class load(object):
         # setting output file names  
      
         self.prefix = prefix
-        #self.poslsm = self.prefix + ".gaul.txt"
-        #self.neglsm = self.prefix + "_negative.gaul.txt"
-        self.posfits = self.prefix + ".gaul.fits"
-        self.negfits = self.prefix + "_negative.gaul.fits"
-        self.poslsm = self.posfits.replace(".gaul.fits",".lsm.html")
-        self.neglsm = self.negfits.replace(".gaul.fits",".lsm.html")
-
+        self.poslsm = self.prefix + ".lsm.html"
+        self.neglsm = self.prefix + "_negative.lsm.html"
 
         # log level  
         self.loglevel = loglevel
@@ -141,28 +133,18 @@ class load(object):
         self.imagedata, self.wcs, self.header, self.pixelsize =\
             utils.reshape_data(self.imagename, prefix=self.prefix)
 
-        
-        self.posdata = utils.image_twobytwo(self.imagedata, self.header, self.prefix)
-
-                 
-
         self.bmaj = numpy.deg2rad(self.header["BMAJ"])
 
         self.do_psf_corr = do_psf_corr
-
         if not self.psfname:
             self.log.info(" No psf provided, do_psf_corr is set to False.")
             self.do_psf_corr = False
-
-        if self.psfname:
-             self.psfdata, self.psfhdr = utils.open_psf_image(self.psfname)
-             self.psfdata = utils.image_twobytwo(self.psfdata, self.psfhdr, self.prefix)
-             
-             
+           
         # computing negative noise
-        self.noise = utils.negative_noise(self.posdata) #here is 2X2 data here
+        self.noise = utils.negative_noise(self.imagedata)
         
         self.log.info(" The negative noise is %e Jy/beam"%self.noise)
+
         if self.noise == 0: 
             self.log.debug(" The negative noise is 0, check image")
 
@@ -172,28 +154,16 @@ class load(object):
                       self.sourcefinder_name)
 
 
-        # making negative image and obtaining the data
+        # making negative image
         self.savefits = False
         self.negativeimage = utils.invert_image(
                                self.imagename, self.imagedata,
-                               self.header, self.prefix) # use source finder.
+                               self.header, self.prefix)
 
-        self.negativedata, w, c, p = utils.reshape_data(self.negativeimage,
-                                  self.prefix) 
- 
-        self.negdata = utils.image_twobytwo(self.negativedata, self.header,
-                                    prefix=self.prefix) # use it in local variance
-
-        # conversion
-        self.d2r = math.pi/180.0
-        self.r2d = 180.0/math.pi
-        #self.d2s = math.pi/180.0 * (1.0/3600.0)
-        self.d2s = 1.0/3600.0
-        self.s2d = 3600.0
         
         # increase the beam by 20% on its major and minor axis
         self.do_beam = increase_beam_cluster
-         
+        
         # boolean optionals    
         self.makeplots = makeplots
         self.do_local_var = do_local_var
@@ -204,16 +174,9 @@ class load(object):
         self.neg_smooth = neg_smooth
         
         # region to evaluate
-        self.corrstep = psf_corr_region
-        self.localstep = local_var_region
-        self.radiusrm = rel_excl_src
-
-        beam_pix = int(round(self.bmaj * self.r2d/self.pixelsize))
-        
-        self.locstep = self.localstep * beam_pix
-
-        self.cfstep = self.corrstep * beam_pix
-            
+        self.psf_corr_region = psf_corr_region
+        self.local_var_region = local_var_region
+        self.rel_excl_src = rel_excl_src
  
         # Pybdsm or source finder fitting thresholds
         self.thresh_isl = thresh_isl
@@ -233,12 +196,15 @@ class load(object):
         self.neg_thresh_pix = neg_thresh_pix
         self.opts_neg["thresh_isl"] = self.neg_thresh_isl
         self.opts_neg["thresh_pix"] = self.neg_thresh_pix
- 
 
-    def source_finder(self, image=None, imagedata=None, thresh=None, prefix=None,
-                      noise=None, output=None, savemask=None, **kw):
+
+
+    def source_finder(self, image=None, thresh=None, prefix=None,
+                      noise=None, lsmname=None, savemask=None, **kw):
         
- 
+        #TODO look for other source finders and how they operate
+         
+
         thresh = thresh or self.pos_smooth
         image = image or self.imagename
 
@@ -247,54 +213,48 @@ class load(object):
         tpos.flush()
         
         # data smoothing
-        mask, noise = utils.thresh_mask(image, 
-                          imagedata, tpos.name, hdr=self.header,
+        mask, noise = utils.thresh_mask(
+                          image, tpos.name,
                           thresh=thresh, noise=self.noise, 
                           sigma=True, smooth=True, prefix=prefix, 
                           savemask=savemask)
-  
-        if self.do_psf_corr or self.do_local_var:
-            naxis = self.header["NAXIS1"] 
-            if self.locstep >= self.cfstep:
-                trim_box = (self.locstep, naxis-self.locstep,
-                            self.locstep, naxis-self.locstep)
-            elif self.localstep <= self.cfstep:
-                trim_box = (self.cfstep, naxis-self.cfstep,
-                            self.cfstep, naxis-self.cfstep)
-        else:
-            trim_box = None
-        
-        
 
-        outfile = output or self.poslsm
+        lsmname = lsmname or self.poslsm
         # source extraction
         utils.sources_extraction(
-             image=tpos.name, output=outfile, 
+             image=tpos.name, output=lsmname, 
              sourcefinder_name=self.sourcefinder_name, 
-             blank_limit=self.noise/1000.0, trim_box=trim_box, prefix=self.prefix,
+             blank_limit=self.noise/100.0, prefix=self.prefix,
              **kw)
 
 
-    def remove_sources_within(self, model):
+    def remove_sources_within(self, catalog, rel_excl_src=None):
    
+        model = Tigger.load(catalog)
         sources = model.sources
-        for i in range(len(self.radiusrm)):
-                ra, dec, tolerance = self.radiusrm[i].split(",")
-                ra, dec, tolerance = map(d2r, (float(ra),
+        
+        if rel_excl_src:
+            for i in range(len(rel_excl_src)):
+                ra, dec, tolerance = rel_excl_src[i].split(",")
+                ra, dec, tolerance = map(numpy.deg2rad, (float(ra),
                                          float(dec), float(tolerance)))
                 within = model.getSourcesNear(ra, dec, tolerance)   
                 for src in sorted(sources):
                     if src in within:
                          sources.remove(src)
+            model.save(catalog)
 
+    def nearest_neighbour(self, model, src):
+        near = model.getSourcesNear(src.pos.ra, src.pos.dec, 5 * self.bmaj)
+        return (1.0/float(len(near)))
     
-    def params(self, modelfits, outfile, ndim, imagedata=None):
-     
+    def params(self, sources, model=None):
+
         labels = dict(size=(0, "Log$_{10}$(Source area)"), 
                       peak=(1, "Log$_{10}$( Peak flux [Jy] )"), 
                       tot=(2, "Log$_{10}$( Total flux [Jy] )"))
-
-        #extra source parameters             
+                     
+        nsrc = len(sources)
         if self.do_psf_corr:
             labels.update( {"coeff":(len(labels),
                             "Log$_{10}$ (CF)")})
@@ -302,110 +262,60 @@ class load(object):
             labels.update( {"local": (len(labels),
                             "Log$_{10}$(Local Variance)")})
         if self.nearsources:
-            labels.update( {"near": (len(labels),
-                            "Log$_{10}$(Near Sources)")})
-
+            labels.update( {"Nearer": (len(labels),
+                            "Log$_{10}$(Source Near)")})     
         
-        data = pyfits.open(modelfits)[1].data
-        nsrc = len(data)
         out = numpy.zeros([nsrc, len(labels)])
 
-         
-        tfile = tempfile.NamedTemporaryFile(suffix=".txt")
-        tfile.flush()
+        for i, src in enumerate(sources):
+            # get source extent in arcsec
+            try:
+               ex = numpy.rad2deg(src.get_attr("_pybdsm_Maj")) * 3600 
+            except AttributeError:
+                ex = self.bmaj * 3600
+            ex = ex or self.bmaj * 3600
+            try:
+                ey = numpy.rad2deg(src.get_attr("_pybdsm_Min")) * 3600 
+            except AttributeError:
+                ey = self.bmin * 3600
+            ey = ey or self.bmin * 3600
+            area = ex * ey * math.pi
 
-        
-        with open(tfile.name, "w") as std:
-            std.write("#format:name ra_d dec_d i emaj_r emin_r pa_d\n")
+            if self.do_local_var:
+                local_variance = src.l
+            if self.do_psf_corr:
+                cf = src.cf
 
-        model = Tigger.load(tfile.name) # open a tmp. file
+            if self.nearsources:
+                near = self.nearest_neighbour(model, src)
 
-        peak, total, area, local, corr = [], [], [], [], []
-        for i, src in enumerate(data):
-            ra, dec = data["RA"][i], data["DEC"][i]
-            flux = data["Total_flux"][i] 
-            emaj, emin = data["Maj"][i], data["Min"][i]
-            pa = data["PA"][i]
-            name = "SRC%d"%i
-            
-
-            posrd =  ModelClasses.Position(ra*self.d2r, dec*self.d2r)
-            flux_I = ModelClasses.Polarization(flux, 0, 0, 0)
-            shape = ModelClasses.Gaussian(emaj*self.d2r, emin*self.d2r, pa*self.d2r)
-            srs = SkyModel.Source(name, posrd, flux_I, shape=shape)
-           
-            # area: find ex and ey if are 0 assign beam size
-            if emaj or emin == 0:
-                srcarea = math.pi * (self.bmaj * self.r2d) * self.d2s *\
-                       (self.bmin *  self.r2d) * self.d2s
-            if  emaj and emin > 0: 
-                srcarea = emaj * emin * math.pi * (self.d2s) * (self.d2s)
-            area.append(srcarea)
-            # peak flux
-            peak.append(data["Peak_flux"][i])
-            total.append(flux)
-            pos = [self.wcs.wcs2pix(*(ra, dec))][0] #deg to pixel
-              
-            
-            local_variance = utils.compute_local_variance(
-                        self.negdata, pos, self.locstep)
-            srs.setAttribute("l", local_variance)
-            local.append(local_variance)
-
-            if self.psfname:
-                if not self.do_psf_corr: 
-                # when psf image is provided but do correlation is No 
-                # this include a tag for correlation
-                  correlation =  utils.compute_psf_correlation(
-                            self.posdata, self.psfdata,
-                            self.psfhdr, pos,  self.cfstep)
-        
-                if self.do_psf_corr:
-                # when do psf is True
-                    correlation =  utils.compute_psf_correlation(
-                              self.posdata, self.psfdata, 
-                              self.psfhdr, pos,  self.cfstep)
-
-                if correlation <= 0 or math.isnan(float(correlation)):
-                    correlation = 1.2 # arbitarily
-                srs.setAttribute("cf", correlation)
-                corr.append(correlation)
-            model.sources.append(srs) 
-
-            # returning parameters
-        for i, src in enumerate(model.sources):
-         
-            near = model.getSourcesNear(src.pos.ra, src.pos.dec, 5 * self.bmaj)
-            nonear = len(near) 
-            src.setAttribute("n", nonear)
+            flux = src.brightness()
+            peak = src.get_attr("_pybdsm_Peak_flux")
+  
             if self.do_psf_corr and self.do_local_var and self.nearsources:
-                out[i,...] =  area[i], peak[i], total[i], corr[i], local[i], nonear
+                out[i,...] = area, peak, flux, cf, local_variance, near
 
-            elif self.do_psf_corr and self.do_local_var and not self.nearsources:
-                out[i,...] =   area[i], peak[i], total[i] , corr[i], local[i]
-        
-            elif self.do_psf_corr and self.nearsources and not self.do_local_var:
-                out[i,...] =   area[i], peak[i], total[i] , corr[i], nonear[i]
-            
-            elif not self.do_psf_corr and self.do_local_var and self.nearsources:
-                out[i,...] =   area[i], peak[i], flux[i] , local[i], nonear[i]
-            
-            elif self.do_psf_corr and not self.do_local_var and not self.nearsources:
-                out[i,...] =   area[i], peak[i], total[i] , corr[i]
-            
-            elif not self.do_psf_corr and self.do_local_var and not self.nearsources:
-                out[i,...] =   area[i], peak[i], total[i] , local[i]
-            
-            elif not self.do_psf_corr and not self.do_local_var and self.nearsources:
-                out[i,...] =   area[i], peak[i], total[i] , nonear[i]
+            elif self.do_psf_corr and self.nearsources: 
+                out[i,...] = area, peak, flux, cf, near
 
+            elif self.do_local_var and self.nearsources: 
+                out[i,...] = area, peak, flux, local_variance, near
+
+            elif self.do_psf_corr and self.do_local_var:
+                out[i,...] = area, peak, flux, cf, local_variance
+
+            elif self.do_psf_corr:
+                out[i,...] = area, peak, flux , cf
+
+            elif self.do_local_var:
+                out[i,...] = area, peak, flux , local_variance 
+
+            elif self.nearsources:
+                out[i,...] = area, peak, flux , near                     
             else:
-                out[i,...] =   area[i], peak[i], total[i]
+                out[i,...] = area, peak, flux
 
-        model.save(outfile)
-                
         return numpy.log10(out), labels 
-
 
 
     def get_reliability(self):
@@ -414,14 +324,12 @@ class load(object):
         # finding sources 
         self.log.info(" Extracting the sources on both sides ")
         
-        self.source_finder(image=self.imagename, imagedata=self.imagedata,
-                           output=self.posfits, thresh=self.pos_smooth, 
-                           savemask=self.savemaskpos,
+        self.source_finder(image=self.imagename, lsmname=self.poslsm, 
+                           thresh=self.pos_smooth, savemask=self.savemaskpos,
                            prefix=self.prefix, **self.opts_pos)
 
-        self.source_finder(image=self.negativeimage, imagedata=self.negativedata,
-                           output=self.negfits, thresh=self.neg_smooth,
-                           savemask=self.savemaskneg,
+        self.source_finder(image=self.negativeimage, lsmname=self.neglsm,
+                           thresh=self.neg_smooth, savemask=self.savemaskneg,
                            prefix=self.prefix+"-neg", **self.opts_neg)
 
         self.log.info(" Source Finder completed successfully ")
@@ -429,11 +337,62 @@ class load(object):
         if not self.savefits:
             os.system("rm -r %s"%self.negativeimage)
 
-         
-        positive, labels = self.params(self.posfits, self.poslsm, 
-                                       self.imagedata.shape, self.imagedata)
-        negative, labels = self.params(self.negfits, self.neglsm,
-                                       self.imagedata.shape, self.negativedata)
+        # removing sources within a specified radius
+        
+        self.remove_sources_within(catalog=self.poslsm, rel_excl_src=
+                                   self.rel_excl_src)
+        self.remove_sources_within(catalog=self.neglsm, rel_excl_src=
+                                   self.rel_excl_src)
+
+        # add local variance as a parameter
+        if self.do_local_var:
+            self.log.info(" Computing the local variance around positive detections ")
+            utils.local_variance(self.imagedata, self.header, 
+                              catalog=self.poslsm, wcs=self.wcs, 
+                              pixelsize=self.pixelsize, local_region=
+                              self.local_var_region, savefig=False,
+                              highvariance_factor=None, prefix=self.prefix,
+                              neg_side=True)
+
+            self.log.info(" DONE: Local variance on the positive side was sucessful ")
+            self.log.info(" Computing the local variance around the negative detections ")
+
+            utils.local_variance(self.imagedata, self.header,
+                              catalog=self.neglsm, wcs=self.wcs,
+                              pixelsize=self.pixelsize, local_region=
+                              self.local_var_region, savefig=False,
+                              highvariance_factor=None, prefix=self.prefix, neg_side=True)
+
+            self.log.info("DONE: Computation of the local variance completed successfully ")
+           
+        # compute correlation if only do_psf_corr = True 
+        #and the psf is provided 
+        if self.do_psf_corr and self.psfname:
+            self.log.info(" Computing the correlation factor of the detections with the PSF ")
+            utils.psf_image_correlation(
+                 catalog=self.poslsm, psfimage=self.psfname,
+                 imagedata=self.imagedata, header=self.header,
+                 wcs=self.wcs, pixelsize=self.pixelsize,
+                 corr_region=self.psf_corr_region, prefix= self.prefix)
+            utils.psf_image_correlation(
+                 catalog=self.neglsm, psfimage=self.psfname, 
+                 imagedata=self.imagedata, header=self.header,
+                 wcs=self.wcs, pixelsize=self.pixelsize, 
+                 corr_region=self.psf_corr_region, prefix=self.prefix)
+            self.log.info(" DONE: Correlation factor has been successfully assigned to the detections.")
+        ##TODO verbose vs. logging
+        pmodel = Tigger.load(self.poslsm, verbose=self.loglevel)
+
+        nmodel = Tigger.load(self.neglsm, verbose=self.loglevel)
+        
+        posSources = pmodel.sources
+        negSources = nmodel.sources
+
+        npsrc = len(posSources)
+        nnsrc = len(negSources)      
+ 
+        positive, labels = self.params(posSources, pmodel)
+        negative, labels = self.params(negSources, nmodel)
 
         # setting up a kernel, Gaussian kernel
         bandwidth = []
@@ -441,15 +400,12 @@ class load(object):
         for plane in negative.T:
             bandwidth.append(plane.std())
 
+
+
         nplanes = len(labels)
         cov = numpy.zeros([nplanes, nplanes])
-        nnsrc = len(negative)
-        npsrc = len(positive)
-        print(nnsrc,npsrc)
-        self.log.debug(" There are %s positive detections "%npsrc)
-        self.log.debug(" There are %s negative detections "%nnsrc)
 
-        self.log.info(" Compting the reliabilities ")
+
         for i in range(nplanes):
             for j in range(nplanes):
                 if i == j:
@@ -459,31 +415,18 @@ class load(object):
         pcov = utils.gaussian_kde_set_covariance(positive.T, cov)
         ncov = utils.gaussian_kde_set_covariance(negative.T, cov)
     
+
         # get number densities
         nps = pcov(positive.T) * npsrc
         nns = ncov(positive.T) * nnsrc
 
         # define reliability of positive catalog
         rel = (nps-nns)/nps
-        pmodel = Tigger.load(self.poslsm)
-        nmodel = Tigger.load(self.neglsm)
-        for src, rf in zip(pmodel.sources, rel):
+
+        for src, rf in zip(posSources, rel):
             src.setAttribute("rel", rf)
-        self.log.info(" Checking for any errors in a model. ")
-        # Verifying: eliminate sources with flux =0, ra=0 or nan etc
-        utils.verifyModel(pmodel, self.poslsm, self.do_psf_corr)
-        utils.verifyModel(nmodel, self.neglsm, self.do_psf_corr)
-
-        
-        if self.radiusrm:
-            self.log.info(" Remove sources ra, dec, radius of  %r" 
-                          " from the phase center" %self.radiusrm)
-            self.remove_sources_within(pmodel)
-
-        self.log.info(" Saving the reliability as an attribute,"
-                      "  the new verified sources. ")
-        pmodel.save(self.poslsm)
-        nmodel.save(self.neglsm)
+            out_lsm = self.poslsm
+        pmodel.save(out_lsm)
 
         if self.makeplots:
             savefig = self.prefix + "_planes.png"

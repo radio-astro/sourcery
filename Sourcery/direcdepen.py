@@ -8,7 +8,7 @@ import Tigger
 from Tigger.Coordinates import angular_dist_pos_angle as dist
 import utils
 import numpy
-import math
+
 
 class load(object):
 
@@ -68,8 +68,7 @@ class load(object):
         self.psfname = psfname
         if not self.psfname:
             self.log.info("dE tagging will be made without the PSF correlation"
-                          " note that this might affect the results.")
-
+                    " note that this might affect the results.")
         self.poscatalog = poscatalog
         self.negcatalog = negcatalog
         
@@ -85,60 +84,32 @@ class load(object):
 
         # tags
         self.snr_tag = "snr"
-        self.local_tag = "high_var"
-        self.corr_tag = "high_corr"
+        self.high_local_tag = "high_var"
+        self.high_corr_tag = "high_corr"
         self.dd_tag = "dE"
 
         # thresholds
         self.snr_thresh = snr_thresh
-        self.localthresh = local_thresh
-        self.corrthresh = high_corr_thresh
-        self.negthresh = negatives_thresh
-       
+        self.local_thresh = local_thresh
+        self.high_corr_thresh = high_corr_thresh
+        self.negatives_thresh = negatives_thresh
         
         #regions
         self.psfcorr_region = psfcorr_region
         self.local_region = local_region
-        self.phaserad = phasecenter_excl_radius # radius from the phase center
-        self.negregion =  negdetec_region # region to look for negatives
+        self.phasecenter_excl_radius = phasecenter_excl_radius
+        self.negdetec_region =  negdetec_region
         
         # central ra, dec, beam major axes
         self. ra0 = numpy.deg2rad(self.header["CRVAL1"])
         self.dec0 = numpy.deg2rad(self.header["CRVAL2"])
-        self.bmaj = self.header['BMAJ'] # in degrees
-
-        # Models
-        self.pmodel = Tigger.load(self.poscatalog, verbose=self.loglevel)
-        self.nmodel = Tigger.load(self.negcatalog, verbose=self.loglevel)
-        self.r2d = 180.0/math.pi
-        self.d2r = math.pi/180.0
+        self.bmaj_deg = self.header['BMAJ'] # in degrees
 
 
-
-    def number_negatives(self, source):
+    def signal_to_noise(self):
         
-
-        #sources = filter(lambda src: src.getTag(tag), psources)
-
-        tolerance = self.negregion * self.bmaj * self.d2r
-
-        if self.phaserad:
-            radius = numpy.deg2rad(self.phaserad * self.bmaj)
-            
-        
-        ra, dec = source.pos.ra, source.pos.dec # in radians
-        within = self.nmodel.getSourcesNear(ra, dec, tolerance)    
-        if len(within) >= self.negthresh:
-            if self.phaserad:
-                if dist(self.ra0, dec, ra, self.dec0)[0] > radius: 
-                        source.setTag(self.dd_tag, True)
-            else:
-                source.setTag(self.dd_tag, True)
-
-
-    def source_selection(self):
-        
-        sources = self.pmodel.sources
+        model = Tigger.load(self.poscatalog, verbose=self.loglevel)
+        sources = model.sources
             
         if self.noise == 0:
             self.log.error(" Division by 0. Aborting")
@@ -147,17 +118,63 @@ class load(object):
             
         thresh = self.snr_thresh * min(snr)
         n = 0
-        for srs, s in zip(sources, snr):
+        for srs, s in zip(sources,snr):
             if s > thresh:
-                local = srs.l 
-                if local > self.localthresh * self.noise:
-                    if self.psfname:
-                        corr = srs.cf
-                        if corr > self.corrthresh:
-                            self.number_negatives(srs)
+                srs.setTag(self.snr_tag, True)
+                n += 1
+        self.log.info(" There are %d number of sources with high SNR "%n)
+        model.save(self.poscatalog)
 
-                    if not self.psfname:
-                        self.number_negatives(srs)
-                            
-        self.pmodel.save(self.poscatalog)
-        return self.poscatalog
+
+    def number_negatives(self):
+        
+        pmodel = Tigger.load(self.poscatalog, verbose=self.loglevel)
+        nmodel = Tigger.load(self.negcatalog, verbose=self.loglevel)
+        psources = pmodel.sources
+        if not self.psfname:
+            sources = filter(lambda src: src.getTag(self.high_local_tag), psources)
+            
+        else:    
+            sources = filter(lambda src: src.getTag(self.high_corr_tag), psources)
+
+        tolerance = numpy.deg2rad(self.negdetec_region * self.bmaj_deg)
+
+        if self.phasecenter_excl_radius:
+            radius = numpy.deg2rad(self.phasecenter_excl_radius * self.bmaj_deg)
+            
+        for srs in sources:
+            ra, dec = srs.pos.ra, srs.pos.dec
+            within = nmodel.getSourcesNear(ra, dec, tolerance)    
+            if len(within) >= self.negatives_thresh:
+                if self.phasecenter_excl_radius:
+                    if dist( self.ra0, dec, ra, self.dec0)[0] > radius: 
+                        srs.setTag(self.dd_tag, True)
+                else:
+                    srs.setTag(self.dd_tag, True)
+        pmodel.save(self.poscatalog)
+
+        
+    def source_selection(self):
+             
+        # signal-to-noise ratio
+        self.signal_to_noise()
+        # local variance
+        utils.local_variance(
+             self.imagedata, self.header, self.poscatalog, self.wcs,
+             self.pixsize, tag=self.snr_tag,local_region=self.local_region,
+             noise=self.noise, highvariance_factor= self.local_thresh,
+             high_local_tag=self.high_local_tag, neg_side=True,
+             setatr=False, prefix=self.prefix, do_high_loc=True)
+        # correlation
+        if self.psfname:
+            utils.psf_image_correlation(
+                catalog=self.poscatalog, psfimage=self.psfname,
+                imagedata=self.imagedata, header=self.header,
+                wcs=self.wcs, pixelsize=self.pixsize, corr_region=
+                self.psfcorr_region, thresh=self.high_corr_thresh,
+                tags=self.high_local_tag, coefftag=self.high_corr_tag,
+                setatr=False, do_high=True, prefix=self.prefix)
+        # number of negative detections
+        self.number_negatives()
+
+        return self.poscatalog, self.negcatalog
