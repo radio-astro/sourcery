@@ -92,8 +92,26 @@ def reshape_data (image, prefix=None):
             data = data[0,...]
     elif ndim > 4:
         log.error(" FITS file has more than 4 axes. Aborting")
-        
+ 
     return data, wcs, hdr, pixel_size
+
+
+
+def image_data(data, prefix=None):
+
+    log = logger(level=0, prefix=prefix) 
+    ndim = len(data.shape)
+
+    if ndim == 4:
+        return data[0,0,...]
+
+    elif ndim == 3:
+        return  data[0,...]
+
+    elif ndim == 2:
+        return  data[...]
+    else:
+        log.error(" FITS file has more than 4 axes. Aborting")
 
 
 # computes the negative noise.
@@ -115,22 +133,6 @@ def invert_image(imagename, data, header, prefix=None):
     newdata = -data
     pyfits.writeto(output, newdata, header, clobber=True)
     return output
-
-
-
-# returns two coloum data
-def image_twobytwo(data, hdr=None, prefix=None):
-     
-     log = logger(level=0, prefix=prefix)
-     ndim = hdr["NAXIS"] or len(data.shape)
-     if ndim == 4:
-         return data[0,0,...]
-     elif ndim == 3:
-          return data[0,...]
-     elif ndim == 2:
-          return data[...]
-     else:
-         log.error(" FITS file has more than 4 or less than two axes. Aborting")
 
 
 
@@ -241,33 +243,16 @@ def sources_extraction(image, output=None,
     return output
 
 
-# checks for sources with 0 flux and 
-# correlaion of 1.2, these are the sources that at
-# nan or 0 as their correlation value. 
-
-def verifyModel(model, lsm, do_psf=None):
-    """Removes sources with 0 flux"""
- 
-    
-    zeroflux = filter(lambda a: (a.flux.I or a.brightness())==0,
-                      model.sources)
-    for s in zeroflux:
-        model.sources.remove(s)
-    if do_psf: 
-        for s in model.sources:
-            cf = s.cf
-            if cf == 1.2:
-                model.sources.remove(s)
-
 
 # computes the locala variance
 def compute_local_variance(imagedata, pos, step):
 
     # ra, dec is in pixel size.
     x, y = pos
-    subrgn = imagedata[y-step : y+step, x-step : x+step]
+    subrgn = imagedata[abs(y-step) : y+step, abs(x-step) : x+step]
     subrgn = subrgn[subrgn > 0]
     std = subrgn.std()
+        
     return std
 
 
@@ -312,16 +297,15 @@ def compute_psf_correlation(imagedata, psfdata, psfhdr, pos,  step=None):
     
     ra0, dec0 = pos
     psf_region  = psfdata[c0-step: c0+step, c0-step : c0+step].flatten()
-    data_region = imagedata[dec0-step : dec0+step, ra0-step:ra0+step].flatten()
-    
+    data_region = imagedata[abs(dec0-step) : dec0+step, abs(ra0-step):ra0+step].flatten()  
     norm_data = (data_region-data_region.min())/(data_region.max()-
                                                  data_region.min())
-
+     
+    
     c_region = numpy.corrcoef((norm_data, psf_region))
     cf =  (numpy.diag((numpy.rot90(c_region))**2)
                                   .sum())**0.5/2**0.5
-    
-    
+      
     return cf 
 
 
