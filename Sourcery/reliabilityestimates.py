@@ -436,7 +436,6 @@ class load(object):
                            prefix=self.prefix+"-neg", **self.opts_neg)
 
         self.log.info(" Source Finder completed successfully ")
-        self.savefits = True
         if not self.savefits:
             os.system("rm -r %s"%self.negimage)
 
