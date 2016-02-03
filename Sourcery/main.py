@@ -95,13 +95,13 @@ def main():
         " E.g ra, dec, radius (in degrees). For more than"
         " one region: ra1,dec1,radius1:ra2,dec2,radius2. Default is None.")
 
-    add("-ps", "--positive-smooth", dest="pos_smooth", type=float, default=1.6, 
+    add("-ps", "--positive-smooth", dest="pos_smooth", type=float, default=2.0, 
         help="Data smoothing to eliminate noise/data peaks given by -ps * noise."
-        " This is for positive side of an Fits image. Default is 1.6.")
+        " This is for positive side of an Fits image. Default is 2.0.")
 
-    add("-ns", "--negative-smooth", dest="neg_smooth", type=float, default=0.8, 
+    add("-ns", "--negative-smooth", dest="neg_smooth", type=float, default=2.0, 
         help="This is similar to -ps above but for negative side"
-        " of an image. Default is 0.8.")
+        " of an image. Default is 2.0.")
 
     add('-pisl', "--thresh-isl", dest="thresh_isl", type=float, default=3,
         help="Threshold for the island boundary in number of sigma above"

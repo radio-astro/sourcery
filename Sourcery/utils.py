@@ -126,14 +126,12 @@ def negative_noise(data):
 
 
 # inverts the image
-def invert_image(imagename, data, header, prefix=None):
+def invert_image(imagename, data, header, output):
     
-    ext = fits_ext(imagename)
-    output = prefix + "_negatives.fits" or imagename.replace(ext,"_negative.fits")
     newdata = -data
     pyfits.writeto(output, newdata, header, clobber=True)
-    return output
-
+    data = image_data(newdata)
+    return newdata, data
 
 
 #----------------------------------------------------
@@ -200,11 +198,11 @@ def thresh_mask(imagename, imagedata, output, hdr, thresh,
     
     imagedata *= (mask==False)
     pyfits.writeto(output, imagedata, hdr, clobber=True)
+
     if savemask:
         mask = (mask== False) * 1 
-
         ext = fits_ext(imagename)
-        outmask = prefix + "-mask.fits" #or  imagename.replace(ext,"-mask.fits")
+        outmask = prefix + "-mask.fits" or  imagename.replace(ext,"-mask.fits")
         pyfits.writeto(outmask, mask, hdr, clobber=True)
         return mask, noise
 
@@ -225,10 +223,6 @@ def sources_extraction(image, output=None,
     output : Tigger format, default image name.lsm.html
         A Catalog name to store the extracted sources
     """
-    
-    ext = fits_ext(output)
-    #fitsfile = output.replace(ext,"fits")
-
     # start with default PYBDSM options
     opts = {}
     opts.update(kw)

@@ -120,10 +120,8 @@ class load(object):
         # setting output file names  
      
         self.prefix = prefix
-        self.posfits = self.prefix + ".gaul.fits"
-        self.negfits = self.prefix + "_negative.gaul.fits"
-        self.poslsm = self.posfits.replace(".gaul.fits",".lsm.html")
-        self.neglsm = self.negfits.replace(".gaul.fits",".lsm.html")
+        self.poslsm = self.prefix + ".lsm.html"
+        self.neglsm = self.prefix +  "_negative.lsm.html"
 
 
         # log level  
@@ -140,8 +138,8 @@ class load(object):
             utils.reshape_data(self.imagename, prefix=self.prefix)
 
         self.imagedata = imagedata.copy()
-        posdata =  utils.image_data(self.imagedata, self.prefix)
-        self.posdata = posdata
+        self.posdata =  utils.image_data(self.imagedata, self.prefix).copy()
+        #self.posdata = posdata
 
 
         self.bmaj = numpy.deg2rad(self.header["BMAJ"])
@@ -151,11 +149,6 @@ class load(object):
         if not self.psfname:
             self.log.info(" No psf provided, do_psf_corr is set to False.")
             self.do_psf_corr = False
-
-        if self.psfname:
-             psfdata, self.psfhdr = utils.open_psf_image(self.psfname)
-             self.psf_corr = utils.image_data(psfdata, self.prefix)
-             self.psfdata = self.psf_corr.copy()
  
         # computing negative noise
         self.noise = utils.negative_noise(self.posdata) #here is 2X2 data here
@@ -172,16 +165,15 @@ class load(object):
 
         # making negative image and obtaining the data
         self.savefits = False
-        self.negimage = utils.invert_image(
-                               self.imagename, self.imagedata,
-                               self.header, self.prefix)
-        negativedata, w, c, p = utils.reshape_data(
-                                        self.negimage,
-                                        self.prefix)   
 
+        self.negimage = self.prefix + "_negative.fits"
+        
+        negativedata, data = utils.invert_image(
+                               self.imagename, self.imagedata,
+                               self.header, self.negimage)
+        self.negdata = data.copy()
         self.negativedata = negativedata.copy()
-        negdata = utils.image_data(self.negativedata, self.prefix)
-        self.negdata = negdata.copy()
+        #self.negdata = negdata.copy()
 
 
         # conversion
@@ -267,10 +259,9 @@ class load(object):
             trim_box = (self.locstep, naxis-self.locstep,
                        self.locstep, naxis-self.locstep)
              
-        outfile = output or self.poslsm
         # source extraction
         utils.sources_extraction(
-             image=tpos.name, output=outfile, 
+             image=tpos.name, output=output, 
              sourcefinder_name=self.sourcefinder_name, 
              blank_limit=self.noise/1000.0, trim_box=trim_box, prefix=self.prefix,
              **kw)
@@ -293,7 +284,7 @@ class load(object):
     def params(self, modelfits, outfile):
      
         #extra source parameters             
-        data = pyfits.open(modelfits)[1].data
+        data = pyfits.open(modelfits)[1].data.copy()
         tfile = tempfile.NamedTemporaryFile(suffix=".txt")
         tfile.flush()
         
@@ -366,7 +357,7 @@ class load(object):
             pos = [self.wcs.wcs2pix(*(ra*self.r2d, dec*self.r2d))][0] #deg to pixel
 
             loc = utils.compute_local_variance(
-                        self.negdata, pos, self.locstep) 
+                        self.negdata.copy(), pos, self.locstep) 
             near = model.getSourcesNear(ra, dec, 5 * self.bmaj)
             nonear = len(near) 
 
@@ -378,9 +369,11 @@ class load(object):
                 src.setAttribute("l", loc)
                 src.setAttribute("n", nonear)
                 if self.psfname:
+                    data, psfhdr = utils.open_psf_image(self.psfname)
+                    psfdata = utils.image_data(data, self.prefix).copy()
                     correlation = utils.compute_psf_correlation(
-                                  self.posdata, self.psfdata, 
-                                  self.psfhdr, pos,  self.cfstep)
+                                  self.posdata.copy(), psfdata, 
+                                  psfhdr, pos,  self.cfstep)
                     if not math.isnan(float(correlation)) or correlation >= 0:
                         corr = correlation
                         src.setAttribute("cf", corr)
@@ -397,7 +390,7 @@ class load(object):
                     out[i,...] =   area[i], peak[i], total[i] , corr, nonear
             
                 elif not self.do_psf_corr and self.do_local_var and self.nearsources:
-                    out[i,...] =   area[i], peak[i], flux[i] , loc, nonear
+                    out[i,...] =   area[i], peak[i], total[i] , loc, nonear
             
                 elif self.do_psf_corr and not self.do_local_var and not self.nearsources:
                     out[i,...] =   area[i], peak[i], total[i] , corr
@@ -424,24 +417,27 @@ class load(object):
 
         # finding sources 
         self.log.info(" Extracting the sources on both sides ")
-        
-        self.source_finder(image=self.imagename, imagedata=self.imagedata,
-                           output=self.posfits, thresh=self.pos_smooth, 
-                           savemask=self.savemaskpos,
-                           prefix=self.prefix, **self.opts_pos)
+ 
+        pfile = self.prefix + ".gaul.fits"
+        nfile = self.prefix + "_negative.gaul.fits"
+  
 
         self.source_finder(image=self.negimage, imagedata=self.negativedata,
-                           output=self.negfits, thresh=self.neg_smooth,
+                           output=nfile, thresh=self.neg_smooth,
                            savemask=self.savemaskneg,
-                           prefix=self.prefix+"-neg", **self.opts_neg)
+                           prefix=self.prefix, **self.opts_neg)
+        self.source_finder(image=self.imagename, imagedata=self.imagedata,
+                           output=pfile, thresh=self.pos_smooth, 
+                           savemask=self.savemaskpos,
+                           prefix=self.prefix, **self.opts_pos)
 
         self.log.info(" Source Finder completed successfully ")
         if not self.savefits:
             os.system("rm -r %s"%self.negimage)
 
          
-        positive, labels = self.params(self.posfits, self.poslsm)
-        negative, labels = self.params(self.negfits, self.neglsm)
+        positive, labels = self.params(pfile, self.poslsm)
+        negative, labels = self.params(nfile, self.neglsm)
 
         
         # setting up a kernel, Gaussian kernel
