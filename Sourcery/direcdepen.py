@@ -13,7 +13,7 @@ import math
 class load(object):
 
 
-    def __init__(self, imagename, poscatalog, negcatalog, psfname=None,
+    def __init__(self, imagename, pmodel, nmodel, psfname=None,
                  snr_thresh=100, local_thresh=0.6, local_region=10,
                  psfcorr_region=2, high_corr_thresh=0.5, negdetec_region=10, 
                  negatives_thresh=10, phasecenter_excl_radius=None,
@@ -70,8 +70,8 @@ class load(object):
             self.log.info("dE tagging will be made without the PSF correlation"
                           " note that this might affect the results.")
 
-        self.poscatalog = poscatalog
-        self.negcatalog = negcatalog
+        self.pmodel = pmodel
+        self.nmodel = nmodel
         
         # reading the imagename data
         self.imagedata, self.wcs, self.header, self.pixsize =\
@@ -108,8 +108,6 @@ class load(object):
         self.bmaj = self.header['BMAJ'] # in degrees
 
         # Models
-        self.pmodel = Tigger.load(self.poscatalog, verbose=self.loglevel)
-        self.nmodel = Tigger.load(self.negcatalog, verbose=self.loglevel)
         self.r2d = 180.0/math.pi
         self.d2r = math.pi/180.0
 
@@ -159,5 +157,4 @@ class load(object):
                     if not self.psfname:
                         self.number_negatives(srs)
                             
-        self.pmodel.save(self.poscatalog)
-        return self.poscatalog
+        return self.pmodel, self.nmodel

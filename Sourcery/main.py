@@ -122,27 +122,27 @@ def main():
         " for negative pixels. Default is 5.")
 
     add("-snr_thr", "--snr-threshold", dest="snr_thresh", type=float,
-        default=80, help="Signal-to-noise threshold with reference"
+        default=40, help="Signal-to-noise threshold with reference"
         " to the minimum source flux in an image, e.g 80* min(snr), sources with"
         " snr > than this are referred to high SNR sources."
-        " Default is 80.")
+        " Default is 40.")
 
     add("-loc_thr", "--localvar-threshold", dest="locvar_thresh",
-        type=float, default=0.9, help="Local variance threshold."
+        type=float, default=0.4, help="Local variance threshold."
         " For -loc-thr of 0.9 means that"
         " sources with local variance > 0.9 * negative noise"
         " are considered sources of high local variance."
-        " Default is 0.9")
+        " Default is 0.4")
 
     add("-pc_thr", "--psfcorr-threshold", dest="psfcorr_thresh", 
         type=float, default=0.5, help="Correlation factor threshold."
         " Sources with threshold larger than the specified are"
         " considered sources of high correlation. Default is 0.5.")    
 
-    add("-nneg", "--num-negatives",dest="num_negatives", type=float, default=8,
+    add("-nneg", "--num-negatives",dest="num_negatives", type=float, default=4,
         help="Number of negative detections around a given source."
         " If N > threshold then sources will be considered as requiring"
-        " direction-dependent calibratio solutions. Default is 8.")
+        " direction-dependent calibratio solutions. Default is 4.")
 
     add("-nrgn", "--neg-region", dest="neg_region", type=float, default=10,
         help="The size of a region around a sources to lookup for"
@@ -239,18 +239,15 @@ def main():
 
                 reldict["prefix"]  = prefix
                 mc = rel.load(image, psf, **reldict)
-                pos, neg = mc.get_reliability()
+                pmodel, nmodel = mc.get_reliability()
 
-                ddict["poscatalog"] = pos
-                ddict["negcatalog"] = neg
+                ddict["pmodel"] = pmodel
+                ddict["nmodel"] = nmodel
                 ddict["prefix"] = prefix
-                if args.rel_thresh:
-                    os.system("tigger-convert --select='rel>%.3f' %s %s -f"
-                              %(args.rel_thresh, pos, pos))
 
                 if enable:
                     dc = dd.load(image, psfname=psf, **ddict)
-                    ppos  = dc.source_selection()
+                    pmodel, nmodel  = dc.source_selection()
 
         else:
 
@@ -259,19 +256,18 @@ def main():
 
             reldict["prefix"]  = prefix 
             mc = rel.load(image, psf, **reldict)
-            pos, neg = mc.get_reliability()
+            pmodel, nmodel = mc.get_reliability()
 
-            ddict["poscatalog"] = pos
-            ddict["negcatalog"] = neg
+            ddict["pmodel"] = pmodel
+            ddict["nmodel"] = nmodel
             ddict["prefix"] = prefix
-
-            if args.rel_thresh:
-                os.system("tigger-convert --select='rel>%.3f' %s %s -f"
-                         %(args.rel_thresh, pos, pos))
 
             if enable:
                 dc = dd.load(image, psfname=psf, **ddict)
-                ppos = dc.source_selection()
+                pmodel, nmodel = dc.source_selection()
+
+        pmodel.save( prefix+".lsm.html")
+        nmodel.save( prefix+"_negative.lsm.html")
         
     else:
         # reliability
@@ -305,13 +301,11 @@ def main():
                      savemask_pos=args.savemask_pos, **pybdsm_opts)
 
             # assignign reliability values
-            pos, neg = mc.get_reliability()
-            if args.rel_thresh:
-                os.system("tigger-convert --select='rel>%.3f' %s %s -f"
-                         %(args.rel_thresh, pos, pos))
+            pmodel, nmodel = mc.get_reliability()
+
             # direction dependent detection tagging
             
-            dc = dd.load(imagename=image, psfname=psf, poscatalog=pos, negcatalog=neg,
+            dc = dd.load(imagename=image, psfname=psf, pmodel=pmodel, nmodel=nmodel,
                     snr_thresh=args.snr_thresh, local_thresh=args.locvar_thresh,
                     local_region=locregion, psfcorr_region=psfregion, 
                     high_corr_thresh=args.psfcorr_thresh, negdetec_region=
@@ -319,6 +313,8 @@ def main():
                     phasecenter_excl_radius=args.phase_center_rm, prefix=prefix,
                     loglevel=args.log_level)
             # tagging
-            ppose = dc.source_selection()
+            pmodel, nmodel = dc.source_selection()
+            pmodel.save( prefix+".lsm.html")
+            nmodel.save( prefix+"_negative.lsm.html")
 
     os.system("rm -r tmp*.log")

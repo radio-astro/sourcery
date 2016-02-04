@@ -15,6 +15,7 @@ import math
 from Tigger.Models import SkyModel, ModelClasses
 import pyfits
 from Tigger.Coordinates import angular_dist_pos_angle as dist
+import sys
 
 
 class load(object):
@@ -137,8 +138,8 @@ class load(object):
         imagedata, self.wcs, self.header, self.pixelsize =\
             utils.reshape_data(self.imagename, prefix=self.prefix)
 
-        self.imagedata = imagedata.copy()
-        self.posdata =  utils.image_data(self.imagedata, self.prefix).copy()
+        self.imagedata = imagedata
+        self.posdata =  utils.image_data(self.imagedata, self.prefix)
         #self.posdata = posdata
 
 
@@ -149,6 +150,10 @@ class load(object):
         if not self.psfname:
             self.log.info(" No psf provided, do_psf_corr is set to False.")
             self.do_psf_corr = False
+        if self.psfname:
+            data, self.psfhdr = utils.open_psf_image(self.psfname)
+            self.psfdata = utils.image_data(data, self.prefix)
+
  
         # computing negative noise
         self.noise = utils.negative_noise(self.posdata) #here is 2X2 data here
@@ -168,13 +173,13 @@ class load(object):
 
         self.negimage = self.prefix + "_negative.fits"
         
-        negativedata, data = utils.invert_image(
+        negativedata = utils.invert_image(
                                self.imagename, self.imagedata,
                                self.header, self.negimage)
-        self.negdata = data.copy()
-        self.negativedata = negativedata.copy()
-        #self.negdata = negdata.copy()
 
+        self.negdata = numpy.array(utils.image_data(negativedata, self.prefix), numpy.float32)
+        self.negativedata = negativedata
+        #self.negdata = negdata.copy()
 
         # conversion
         self.d2r = math.pi/180.0
@@ -205,8 +210,6 @@ class load(object):
         self.locstep = self.localstep * beam_pix
 
         self.cfstep = self.corrstep * beam_pix
-             
-            
  
         # Pybdsm or source finder fitting thresholds
         self.thresh_isl = thresh_isl
@@ -281,10 +284,10 @@ class load(object):
                          sources.remove(src)
 
     
-    def params(self, modelfits, outfile):
+    def params(self, modelfits):
      
         #extra source parameters             
-        data = pyfits.open(modelfits)[1].data.copy()
+        data = pyfits.open(modelfits)[1].data
         tfile = tempfile.NamedTemporaryFile(suffix=".txt")
         tfile.flush()
         
@@ -357,7 +360,7 @@ class load(object):
             pos = [self.wcs.wcs2pix(*(ra*self.r2d, dec*self.r2d))][0] #deg to pixel
 
             loc = utils.compute_local_variance(
-                        self.negdata.copy(), pos, self.locstep) 
+                        self.negdata, pos, self.locstep) 
             near = model.getSourcesNear(ra, dec, 5 * self.bmaj)
             nonear = len(near) 
 
@@ -369,11 +372,9 @@ class load(object):
                 src.setAttribute("l", loc)
                 src.setAttribute("n", nonear)
                 if self.psfname:
-                    data, psfhdr = utils.open_psf_image(self.psfname)
-                    psfdata = utils.image_data(data, self.prefix).copy()
                     correlation = utils.compute_psf_correlation(
-                                  self.posdata.copy(), psfdata, 
-                                  psfhdr, pos,  self.cfstep)
+                                  self.posdata, self.psfdata, 
+                                  self.psfhdr, pos,  self.cfstep)
                     if not math.isnan(float(correlation)) or correlation >= 0:
                         corr = correlation
                         src.setAttribute("cf", corr)
@@ -406,9 +407,8 @@ class load(object):
         
         nz = (out == 0).sum(1)
         output = out[nz <= 0, :]
-        model.save(outfile)
         
-        return numpy.log10(output), labels 
+        return model, numpy.log10(output), labels 
 
 
 
@@ -436,8 +436,9 @@ class load(object):
             os.system("rm -r %s"%self.negimage)
 
          
-        positive, labels = self.params(pfile, self.poslsm)
-        negative, labels = self.params(nfile, self.neglsm)
+        pmodel, positive, labels = self.params(pfile)
+        nmodel, negative, labels = self.params(nfile)
+        #nmodel.save(self.neglsm)
 
         
         # setting up a kernel, Gaussian kernel
@@ -469,7 +470,6 @@ class load(object):
 
         # define reliability of positive catalog
         rel = (nps-nns)/nps
-        pmodel = Tigger.load(self.poslsm)
         for src, rf in zip(pmodel.sources, rel):
             src.setAttribute("rel", rf)
         self.log.info(" Checking for any errors in a model. ")
@@ -477,12 +477,12 @@ class load(object):
 
         self.log.info(" Saving the reliability as an attribute,"
                       "  the new verified sources. ")
-        pmodel.save(self.poslsm)
+        #pmodel.save(self.poslsm)
 
         if self.makeplots:
             savefig = self.prefix + "_planes.png"
             utils.plot(positive, negative, rel=rel, labels=labels,
                         savefig=savefig, prefix=self.prefix)
 
-        return  self.poslsm, self.neglsm      
+        return  pmodel, nmodel
 

@@ -22,8 +22,8 @@
     },
     "dd_tagging" : {
          "enable": true,
-         "snr_thresh" : 80,
-         "local_thresh" : 0.9,
+         "snr_thresh" : 40,
+         "local_thresh" : 0.4,
          "local_region" : 10,
          "psfcorr_region" : 5,
          "high_corr_thresh" : 0.5,

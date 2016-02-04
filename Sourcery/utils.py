@@ -130,8 +130,7 @@ def invert_image(imagename, data, header, output):
     
     newdata = -data
     pyfits.writeto(output, newdata, header, clobber=True)
-    data = image_data(newdata)
-    return newdata, data
+    return newdata
 
 
 #----------------------------------------------------
@@ -166,7 +165,7 @@ def thresh_mask(imagename, imagedata, output, hdr, thresh,
     ndim = hdr["NAXIS"] 
     imslice = [0] * ndim
     imslice[-2:] = [slice(None)] * 2
-    data = imagedata[imslice].copy()
+    data = imagedata[imslice]
     
     
     # If smooth is not specified, use a fraction of the beam
