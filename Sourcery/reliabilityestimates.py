@@ -138,8 +138,8 @@ class load(object):
         imagedata, self.wcs, self.header, self.pixelsize =\
             utils.reshape_data(self.imagename, prefix=self.prefix)
 
-        self.imagedata = imagedata
-        self.posdata =  utils.image_data(self.imagedata, self.prefix)
+        self.imagedata = numpy.array(imagedata, dtype=numpy.float32)
+        self.posdata =  numpy.array(utils.image_data(self.imagedata, self.prefix), dtype=numpy.float32)
         #self.posdata = posdata
 
 
@@ -152,7 +152,7 @@ class load(object):
             self.do_psf_corr = False
         if self.psfname:
             data, self.psfhdr = utils.open_psf_image(self.psfname)
-            self.psfdata = utils.image_data(data, self.prefix)
+            self.psfdata = numpy.array(utils.image_data(data, self.prefix), dtype=numpy.float32)
 
  
         # computing negative noise
