@@ -1,8 +1,8 @@
-##Current version: 0.2.5 
+##Current version: 0.2.6
 
 
-##From version 0.2.4 to 0.25, the changes made were;
+##From version 0.2.5 to 0.2.6, the changes made were;
 
-#####Source finder handles output in fits format (initially this was GAUL).
+##### Deleting some of the irrelevant things, such local region in DD script. Which is nolonger needed.
 
 
