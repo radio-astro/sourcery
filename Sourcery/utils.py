@@ -294,10 +294,12 @@ def compute_psf_correlation(imagedata, psfdata, psfhdr, pos,  step=None):
     norm_data = (data_region-data_region.min())/(data_region.max()-
                                                  data_region.min())
      
-    
-    c_region = numpy.corrcoef((norm_data, psf_region))
-    cf =  (numpy.diag((numpy.rot90(c_region))**2)
+    if len(psf_region) ==  len(norm_data):
+        c_region = numpy.corrcoef((norm_data, psf_region))
+        cf =  (numpy.diag((numpy.rot90(c_region))**2)
                                   .sum())**0.5/2**0.5
+    else:
+        cf = numpy.nan
       
     return cf 
 
