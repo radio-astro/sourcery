@@ -213,12 +213,13 @@ def main():
 
                 reldict["prefix"]  = prefix
                 mc = rel.load(image, psf, **reldict)
-                pmodel, nmodel, noise = mc.get_reliability()
+                pmodel, nmodel, noise, bmaj = mc.get_reliability()
 
                 ddict["pmodel"] = pmodel
                 ddict["nmodel"] = nmodel
                 ddict["prefix"] = prefix
                 ddict["noise"] = noise
+                ddict["beamaj"] = bmaj
 
                 if enable:
                     dc = dd.load(image, psfname=psf, **ddict)
@@ -231,12 +232,13 @@ def main():
 
             reldict["prefix"]  = prefix 
             mc = rel.load(image, psf, **reldict)
-            pmodel, nmodel, noise = mc.get_reliability()
+            pmodel, nmodel, noise, bmaj = mc.get_reliability()
 
             ddict["pmodel"] = pmodel
             ddict["nmodel"] = nmodel
             ddict["prefix"] = prefix
             ddict["noise"]  = noise
+            ddict["beamaj"] = bmaj
 
             if enable:
                 dc = dd.load(image, psfname=psf, **ddict)
@@ -276,12 +278,12 @@ def main():
                      savemask_pos=args.savemask_pos, **pybdsm_opts)
 
             # assignign reliability values
-            pmodel, nmodel, noise = mc.get_reliability()
+            pmodel, nmodel, noise, bmaj = mc.get_reliability()
 
             # direction dependent detection tagging
             
             dc = dd.load(imagename=image, psfname=psf, pmodel=pmodel, nmodel=nmodel,
-                    snr_thresh=args.snr_thresh, local_thresh=args.locvar_thresh, 
+                    beamaj=bmaj, snr_thresh=args.snr_thresh, local_thresh=args.locvar_thresh, 
                     high_corr_thresh=args.psfcorr_thresh, negdetec_region=
                     args.neg_region, negatives_thresh=args.num_negatives, noise=noise,
                     phasecenter_excl_radius=args.phase_center_rm, prefix=prefix,

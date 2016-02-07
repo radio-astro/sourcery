@@ -181,6 +181,7 @@ class load(object):
         # conversion
         self.d2r = math.pi/180.0
         self.r2d = 180.0/math.pi
+
         beam_pix = int(round(self.bmaj * self.r2d/self.pixelsize))
         self.locstep = self.localstep * beam_pix
         self.cfstep = self.corrstep * beam_pix
@@ -446,5 +447,5 @@ class load(object):
             utils.plot(positive, negative, rel=rel, labels=labels,
                         savefig=savefig, prefix=self.prefix)
 
-        return  pmodel, nmodel, self.noise
+        return  pmodel, nmodel, self.noise, numpy.rad2deg(self.bmaj)
 

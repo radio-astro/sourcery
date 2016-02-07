@@ -13,7 +13,7 @@ import math
 class load(object):
 
 
-    def __init__(self, imagename, pmodel, nmodel, psfname=None, noise=None,
+    def __init__(self, imagename, pmodel, nmodel, beamaj, psfname=None, noise=None,
                  snr_thresh=40, local_thresh=0.4, high_corr_thresh=0.5, negdetec_region=10, 
                  negatives_thresh=5, phasecenter_excl_radius=None,
                  prefix=None, loglevel=0):
@@ -69,7 +69,7 @@ class load(object):
 
         self.pmodel = pmodel
         self.nmodel = nmodel
-        
+        self.psfname =  psfname
 
         self.log.info(" Loading image data")
 
@@ -97,7 +97,7 @@ class load(object):
        # conversion
         self.r2d = 180.0/math.pi
         self.d2r = math.pi/180.0
-
+        self.bmaj = beamaj
 
 
     def number_negatives(self, source):
