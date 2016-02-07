@@ -186,6 +186,8 @@ class load(object):
         self.locstep = self.localstep * beam_pix
         self.cfstep = self.corrstep * beam_pix
         self.bmin, self.bpa =  self.header["BMIN"], self.header["BPA"]
+
+        self.opts_pos = {}
         if self.do_beam:
             bmaj = self.header["BMAJ"]
             self.opts_pos["beam"] = (1.2*bmaj, 1.2*self.bmin, self.bpa)
