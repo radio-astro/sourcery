@@ -119,7 +119,7 @@ class load(object):
         within = self.nmodel.getSourcesNear(ra, dec, tolerance)    
         if len(within) >= self.negthresh:
             if self.phaserad:
-                if dist(self.ra0, dec, ra, self.dec0)[0] > radius: 
+                if dist(self.ra0, self.dec0, ra, dec)[0] > radius: 
                         source.setTag(self.dd_tag, True)
             else:
                 source.setTag(self.dd_tag, True)
