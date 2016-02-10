@@ -13,7 +13,7 @@ import math
 class load(object):
 
 
-    def __init__(self, imagename, pmodel, nmodel, beamaj, psfname=None, noise=None,
+    def __init__(self, imagename, pmodel, nmodel, header, psfname=None, noise=None,
                  snr_thresh=40, local_thresh=0.4, high_corr_thresh=0.5, negdetec_region=10, 
                  negatives_thresh=5, phasecenter_excl_radius=None,
                  prefix=None, loglevel=0):
@@ -70,7 +70,8 @@ class load(object):
         self.pmodel = pmodel
         self.nmodel = nmodel
         self.psfname =  psfname
-
+        self.hdr = header
+  
         self.log.info(" Loading image data")
 
         self.noise = noise
@@ -97,8 +98,11 @@ class load(object):
        # conversion
         self.r2d = 180.0/math.pi
         self.d2r = math.pi/180.0
-        self.bmaj = beamaj
-
+        self.bmaj = self.hdr["BMAJ"] # in degrees
+        
+        self.ra0 =  self.hdr["CRVAL1"] * self.d2r
+        self.dec0 = self.hdr["CRVAL2"] * self.d2r
+ 
 
     def number_negatives(self, source):
         

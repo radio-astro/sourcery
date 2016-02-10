@@ -449,5 +449,5 @@ class load(object):
             utils.plot(positive, negative, rel=rel, labels=labels,
                         savefig=savefig, prefix=self.prefix)
 
-        return  pmodel, nmodel, self.noise, numpy.rad2deg(self.bmaj)
+        return  pmodel, nmodel, self.noise, self.header
 
