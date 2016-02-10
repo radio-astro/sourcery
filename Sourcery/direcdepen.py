@@ -22,13 +22,13 @@ class load(object):
         """ Determines sources that require direction-dependent (DD)
             calibration solutions.
 
-        imagename: Fits data
-
         psfname: PSF fits data
 
         pmodel: Model of the positive image.
 
         nmodel: Model of the negative image
+ 
+        header: The header of the input image
 
         noise: float, Default None.
              The noise of the image.

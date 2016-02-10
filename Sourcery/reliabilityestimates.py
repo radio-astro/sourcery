@@ -125,7 +125,6 @@ class load(object):
             utils.reshape_data(self.imagename, prefix=self.prefix)
 
         self.imagedata = numpy.array(imagedata, dtype=numpy.float32)
-        self.posdata =  numpy.array(utils.image_data(self.imagedata, self.prefix), dtype=numpy.float32)
         
         self.bmaj = numpy.deg2rad(self.header["BMAJ"])
 
@@ -141,13 +140,13 @@ class load(object):
         if not self.psfname:
             self.log.info(" No psf provided, do_psf_corr is set to False.")
             self.do_psf_corr = False
+
         if self.psfname:
-            data, self.psfhdr = utils.open_psf_image(self.psfname)
-            self.psfdata = numpy.array(utils.image_data(data, self.prefix), dtype=numpy.float32)
+            self.psfdata, self.psfhdr = utils.open_psf_image(self.psfname)
 
  
         # computing negative noise
-        self.noise = utils.negative_noise(self.posdata) #here is 2X2 data here
+        self.noise = utils.negative_noise(self.imagedata, self.prefix) #here is 2X2 data here
         
         self.log.info(" The negative noise is %e Jy/beam"%self.noise)
         if self.noise == 0: 
@@ -164,7 +163,6 @@ class load(object):
                                self.imagename, self.imagedata,
                                self.header, self.negimage)
 
-        self.negdata = numpy.array(utils.image_data(negativedata, self.prefix), numpy.float32)
         self.negativedata = numpy.array(negativedata, numpy.float32)
        
         # smoothing factors
@@ -262,14 +260,16 @@ class load(object):
         model = Tigger.load(tfile.name) # open a tmp. file
 
         peak, total, area = [], [], []
-
+        positions = []
         for i, src in enumerate(data):
             ra, dec = data["RA"][i], data["DEC"][i]
             flux = data["Total_flux"][i] 
             emaj, emin = data["Maj"][i], data["Min"][i]
             pa = data["PA"][i]
             name = "SRC%d"%i
-        
+
+            pos = [self.wcs.wcs2pix(*(ra, dec))][0] #deg to pixel
+            
             posrd =  ModelClasses.Position(ra*self.d2r, dec*self.d2r)
             flux_I = ModelClasses.Polarization(flux, 0, 0, 0)
             shape = ModelClasses.Gaussian(emaj*self.d2r, emin*self.d2r, pa*self.d2r)
@@ -292,7 +292,15 @@ class load(object):
                   peak.append(peak_flux)
                   total.append(flux)
                   area.append(srcarea)
-
+                  positions.append(pos)
+        model, loc = utils.compute_local_variance(self.imagedata, 
+                          model, positions, self.locstep,
+                          self.prefix)
+        if self.psfname:
+           model, corr = utils.compute_psf_correlation(self.imagedata, 
+                         self.psfdata, model=model, psfhdr=self.psfhdr,
+                         positions=positions, step=self.cfstep,
+                         prefix=self.prefix)
         # removes sources in a given radius from the phase center
         if self.radiusrm:
             self.log.info(" Remove sources ra, dec, radius of  %r" 
@@ -315,65 +323,44 @@ class load(object):
 
         nsrc = len(model.sources)
         out = numpy.zeros([nsrc, len(labels)])         
-        
+         
+
         # returning parameters
         for i, src in enumerate(model.sources):
 
             ra, dec = src.pos.ra, src.pos.dec
-            pos = [self.wcs.wcs2pix(*(ra * self.r2d, dec * self.r2d))][0] #deg to pixel
-
-            # computes the local variance
-            
-            loc = utils.compute_local_variance(
-                        self.negdata, pos, self.locstep) 
             near = model.getSourcesNear(ra, dec, 5 * self.bmaj)
             nonear = len(near) 
+            if self.nearsources:
+                src.setAttribute("n", nonear)
 
-            if math.isnan(float(loc)) or loc <=0:
-                model.sources.remove(src)
-                self.log.info(" Sources %s is removed as it has"
-                              " nan or 0 local variance."%src.name)
+            if self.do_psf_corr and self.do_local_var and self.nearsources:
+                 out[i,...] =  area[i], peak[i], total[i], corr[i], loc[i], nonear
+
+            elif self.do_psf_corr and self.do_local_var and not self.nearsources:
+                 out[i,...] =   area[i], peak[i], total[i] , corr[i], loc[i]
+        
+            elif self.do_psf_corr and self.nearsources and not self.do_local_var:
+                out[i,...] =   area[i], peak[i], total[i] , corr[i], nonear
+            
+            elif not self.do_psf_corr and self.do_local_var and self.nearsources:
+                out[i,...] =   area[i], peak[i], total[i] , loc[i], nonear
+            
+            elif self.do_psf_corr and not self.do_local_var and not self.nearsources:
+                out[i,...] =   area[i], peak[i], total[i] , corr[i]
+            
+            elif not self.do_psf_corr and self.do_local_var and not self.nearsources:
+                out[i,...] =   area[i], peak[i], total[i] , loc[i]
+            
+            elif not self.do_psf_corr and not self.do_local_var and self.nearsources:
+                out[i,...] =   area[i], peak[i], total[i] , nonear
 
             else:
-                src.setAttribute("l", loc)
-                src.setAttribute("n", nonear)
-                if self.psfname:
-                    correlation = utils.compute_psf_correlation(
-                                  self.posdata, self.psfdata, 
-                                  self.psfhdr, pos,  self.cfstep)
-                    if not math.isnan(float(correlation)) or correlation >= 0:
-                        corr = correlation
-                        src.setAttribute("cf", corr)
-                    else:
-                        model.sources.remove(src)
-
-                if self.do_psf_corr and self.do_local_var and self.nearsources:
-                     out[i,...] =  area[i], peak[i], total[i], corr, loc, nonear
-
-                elif self.do_psf_corr and self.do_local_var and not self.nearsources:
-                    out[i,...] =   area[i], peak[i], total[i] , corr, loc
-        
-                elif self.do_psf_corr and self.nearsources and not self.do_local_var:
-                    out[i,...] =   area[i], peak[i], total[i] , corr, nonear
-            
-                elif not self.do_psf_corr and self.do_local_var and self.nearsources:
-                    out[i,...] =   area[i], peak[i], total[i] , loc, nonear
-            
-                elif self.do_psf_corr and not self.do_local_var and not self.nearsources:
-                    out[i,...] =   area[i], peak[i], total[i] , corr
-            
-                elif not self.do_psf_corr and self.do_local_var and not self.nearsources:
-                    out[i,...] =   area[i], peak[i], total[i] , loc
-            
-                elif not self.do_psf_corr and not self.do_local_var and self.nearsources:
-                    out[i,...] =   area[i], peak[i], total[i] , nonear
-
-                else:
-                    out[i,...] =   area[i], peak[i], total[i]
+                out[i,...] =   area[i], peak[i], total[i]
         # removes the rows with 0s
         removezeros = (out == 0).sum(1)
         output = out[removezeros <= 0, :]
-        
+                  
         return model, numpy.log10(output), labels 
 
 

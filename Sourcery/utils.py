@@ -115,10 +115,11 @@ def image_data(data, prefix=None):
 
 
 # computes the negative noise.
-def negative_noise(data):
+def negative_noise(data, prefix=None):
 
     """ Computes the image noise using the negative pixels """
 
+    data = image_data(data, prefix)
     negative = data[data<0].flatten()
     noise = numpy.concatenate([negative,-negative]).std()
 
@@ -238,15 +239,25 @@ def sources_extraction(image, output=None,
 
 
 # computes the locala variance
-def compute_local_variance(imagedata, pos, step):
+def compute_local_variance(imagedata, model, positions, step, prefix):
 
     # ra, dec is in pixel size.
-    x, y = pos
-    subrgn = imagedata[abs(y-step) : y+step, abs(x-step) : x+step]
-    subrgn = subrgn[subrgn > 0]
-    std = subrgn.std()
-        
-    return std
+    imagedata = image_data(imagedata, prefix)
+    local = []
+    
+    for pos, src in zip(positions, model.sources):
+        x, y = pos
+        subrgn = imagedata[abs(y-step) : y+step, abs(x-step) : x+step]
+        subrgn = subrgn[subrgn > 0]
+        std = subrgn.std()
+
+        if math.isnan(float(std)) or std < 0:       
+            model.sources.remove(src)
+
+        else: 
+            local.append(std)
+            src.setAttribute("l", std)
+    return model, local 
 
 
 # plots for local variance but yet put to work.
@@ -276,7 +287,8 @@ def open_psf_image(psfimage):
     
 
 #computes the correlation factor
-def compute_psf_correlation(imagedata, psfdata, psfhdr, pos,  step=None):
+def compute_psf_correlation(imagedata, psfdata, model,  psfhdr, positions,
+                            step=None, prefix=None):
 
     """Computes PSF correlation.
  
@@ -288,20 +300,29 @@ def compute_psf_correlation(imagedata, psfdata, psfhdr, pos,  step=None):
     
     c0 = psfhdr["CRPIX2"] 
     
-    ra0, dec0 = pos
+    imagedata = image_data(imagedata, prefix)
+    psfdata = image_data(psfdata, prefix)
     psf_region  = psfdata[c0-step: c0+step, c0-step : c0+step].flatten()
-    data_region = imagedata[abs(dec0-step) : dec0+step, abs(ra0-step):ra0+step].flatten()  
-    norm_data = (data_region-data_region.min())/(data_region.max()-
+    correlation = []
+    for pos, src in zip(positions, model.sources):
+        ra0, dec0 = pos
+        data_region = imagedata[abs(dec0-step) : dec0+step, abs(ra0-step):ra0+step].flatten()  
+        norm_data = (data_region-data_region.min())/(data_region.max()-
                                                  data_region.min())
      
-    if len(psf_region) ==  len(norm_data):
-        c_region = numpy.corrcoef((norm_data, psf_region))
-        cf =  (numpy.diag((numpy.rot90(c_region))**2)
+        if len(psf_region) ==  len(norm_data):
+            c_region = numpy.corrcoef((norm_data, psf_region))
+            cf =  (numpy.diag((numpy.rot90(c_region))**2)
                                   .sum())**0.5/2**0.5
-    else:
-        cf = numpy.nan
+            if math.isnan(float(cf)) or cf < 0:
+                model.sources.remove(src)
+            else:
+                src.setAttribute("cf", cf)
+                correlation.append(cf)                
+        else:
+            model.sources.remove(src)
       
-    return cf 
+    return model, correlation
 
 
 # plots the parameter space
