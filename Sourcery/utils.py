@@ -92,15 +92,34 @@ def reshape_data (image, prefix=None):
             data = data[0,...]
     elif ndim > 4:
         log.error(" FITS file has more than 4 axes. Aborting")
-        
+ 
     return data, wcs, hdr, pixel_size
 
 
+
+def image_data(data, prefix=None):
+
+    log = logger(level=0, prefix=prefix) 
+    ndim = len(data.shape)
+
+    if ndim == 4:
+        return data[0,0,...]
+
+    elif ndim == 3:
+        return  data[0,...]
+
+    elif ndim == 2:
+        return  data[...]
+    else:
+        log.error(" FITS file has more than 4 axes. Aborting")
+
+
 # computes the negative noise.
-def negative_noise(data):
+def negative_noise(data, prefix=None):
 
     """ Computes the image noise using the negative pixels """
 
+    data = image_data(data, prefix)
     negative = data[data<0].flatten()
     noise = numpy.concatenate([negative,-negative]).std()
 
@@ -108,30 +127,11 @@ def negative_noise(data):
 
 
 # inverts the image
-def invert_image(imagename, data, header, prefix=None):
+def invert_image(imagename, data, header, output):
     
-    ext = fits_ext(imagename)
-    output = prefix + "_negatives.fits" or imagename.replace(ext,"_negative.fits")
     newdata = -data
     pyfits.writeto(output, newdata, header, clobber=True)
-    return output
-
-
-
-# returns two coloum data
-def image_twobytwo(data, hdr=None, prefix=None):
-     
-     log = logger(level=0, prefix=prefix)
-     ndim = hdr["NAXIS"] or len(data.shape)
-     if ndim == 4:
-         return data[0,0,...]
-     elif ndim == 3:
-          return data[0,...]
-     elif ndim == 2:
-          return data[...]
-     else:
-         log.error(" FITS file has more than 4 or less than two axes. Aborting")
-
+    return newdata
 
 
 #----------------------------------------------------
@@ -166,7 +166,7 @@ def thresh_mask(imagename, imagedata, output, hdr, thresh,
     ndim = hdr["NAXIS"] 
     imslice = [0] * ndim
     imslice[-2:] = [slice(None)] * 2
-    data = imagedata[imslice].copy()
+    data = imagedata[imslice]
     
     
     # If smooth is not specified, use a fraction of the beam
@@ -198,11 +198,11 @@ def thresh_mask(imagename, imagedata, output, hdr, thresh,
     
     imagedata *= (mask==False)
     pyfits.writeto(output, imagedata, hdr, clobber=True)
+
     if savemask:
         mask = (mask== False) * 1 
-
         ext = fits_ext(imagename)
-        outmask = prefix + "-mask.fits" #or  imagename.replace(ext,"-mask.fits")
+        outmask = prefix + "-mask.fits" or  imagename.replace(ext,"-mask.fits")
         pyfits.writeto(outmask, mask, hdr, clobber=True)
         return mask, noise
 
@@ -223,10 +223,6 @@ def sources_extraction(image, output=None,
     output : Tigger format, default image name.lsm.html
         A Catalog name to store the extracted sources
     """
-    
-    ext = fits_ext(output)
-    #fitsfile = output.replace(ext,"fits")
-
     # start with default PYBDSM options
     opts = {}
     opts.update(kw)
@@ -241,34 +237,27 @@ def sources_extraction(image, output=None,
     return output
 
 
-# checks for sources with 0 flux and 
-# correlaion of 1.2, these are the sources that at
-# nan or 0 as their correlation value. 
-
-def verifyModel(model, lsm, do_psf=None):
-    """Removes sources with 0 flux"""
- 
-    
-    zeroflux = filter(lambda a: (a.flux.I or a.brightness())==0,
-                      model.sources)
-    for s in zeroflux:
-        model.sources.remove(s)
-    if do_psf: 
-        for s in model.sources:
-            cf = s.cf
-            if cf == 1.2:
-                model.sources.remove(s)
-
 
 # computes the locala variance
-def compute_local_variance(imagedata, pos, step):
+def compute_local_variance(imagedata, model, positions, step, prefix):
 
     # ra, dec is in pixel size.
-    x, y = pos
-    subrgn = imagedata[y-step : y+step, x-step : x+step]
-    subrgn = subrgn[subrgn > 0]
-    std = subrgn.std()
-    return std
+    imagedata = image_data(imagedata, prefix)
+    local = []
+    
+    for pos, src in zip(positions, model.sources):
+        x, y = pos
+        subrgn = imagedata[abs(y-step) : y+step, abs(x-step) : x+step]
+        subrgn = subrgn[subrgn > 0]
+        std = subrgn.std()
+
+        if math.isnan(float(std)) or std < 0:       
+            model.sources.remove(src)
+
+        else: 
+            local.append(std)
+            src.setAttribute("l", std)
+    return model, local 
 
 
 # plots for local variance but yet put to work.
@@ -298,7 +287,8 @@ def open_psf_image(psfimage):
     
 
 #computes the correlation factor
-def compute_psf_correlation(imagedata, psfdata, psfhdr, pos,  step=None):
+def compute_psf_correlation(imagedata, psfdata, model,  psfhdr, positions,
+                            step=None, prefix=None):
 
     """Computes PSF correlation.
  
@@ -310,19 +300,29 @@ def compute_psf_correlation(imagedata, psfdata, psfhdr, pos,  step=None):
     
     c0 = psfhdr["CRPIX2"] 
     
-    ra0, dec0 = pos
+    imagedata = image_data(imagedata, prefix)
+    psfdata = image_data(psfdata, prefix)
     psf_region  = psfdata[c0-step: c0+step, c0-step : c0+step].flatten()
-    data_region = imagedata[dec0-step : dec0+step, ra0-step:ra0+step].flatten()
-    
-    norm_data = (data_region-data_region.min())/(data_region.max()-
+    correlation = []
+    for pos, src in zip(positions, model.sources):
+        ra0, dec0 = pos
+        data_region = imagedata[abs(dec0-step) : dec0+step, abs(ra0-step):ra0+step].flatten()  
+        norm_data = (data_region-data_region.min())/(data_region.max()-
                                                  data_region.min())
-
-    c_region = numpy.corrcoef((norm_data, psf_region))
-    cf =  (numpy.diag((numpy.rot90(c_region))**2)
+     
+        if len(psf_region) ==  len(norm_data):
+            c_region = numpy.corrcoef((norm_data, psf_region))
+            cf =  (numpy.diag((numpy.rot90(c_region))**2)
                                   .sum())**0.5/2**0.5
-    
-    
-    return cf 
+            if math.isnan(float(cf)) or cf < 0:
+                model.sources.remove(src)
+            else:
+                src.setAttribute("cf", cf)
+                correlation.append(cf)                
+        else:
+            model.sources.remove(src)
+      
+    return model, correlation
 
 
 # plots the parameter space
