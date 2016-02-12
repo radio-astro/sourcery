@@ -232,7 +232,7 @@ def main():
 
             reldict["prefix"]  = prefix 
             mc = rel.load(image, psf, **reldict)
-            pmodel, nmodel, noise, bmaj = mc.get_reliability()
+            pmodel, nmodel, noise, hdr = mc.get_reliability()
 
             ddict["pmodel"] = pmodel
             ddict["nmodel"] = nmodel
