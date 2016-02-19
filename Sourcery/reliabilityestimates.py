@@ -249,7 +249,7 @@ class load(object):
         return model
     
 
-    def params(self, modelfits):
+    def params(self, modelfits, data_image):
      
         # reads in source finder output             
         data = pyfits.open(modelfits)[1].data
@@ -297,7 +297,7 @@ class load(object):
                   srs.setAttribute("l", local)
                   if not math.isnan(float(local)) or local  > 0:
                       if self.psfname:
-                          pdata, psf = utils.compute_psf_correlation(self.image2by2,
+                          pdata, psf = utils.compute_psf_correlation(data_image,
                                          self.psfdata, self.psfhdr, pos, self.cfstep)
 
                           if len(pdata) == len(psf):
@@ -403,8 +403,8 @@ class load(object):
             os.system("rm -r %s"%self.negimage)
 
          
-        pmodel, positive, labels = self.params(pfile)
-        nmodel, negative, labels = self.params(nfile)
+        pmodel, positive, labels = self.params(pfile, self.image2by2)
+        nmodel, negative, labels = self.params(nfile, self.negimage2by2)
      
         # setting up a kernel, Gaussian kernel
         bandwidth = []
