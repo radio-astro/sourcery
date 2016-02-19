@@ -115,8 +115,8 @@ def main():
         " Default is 40.")
 
     add("-loc_thr", "--localvar-threshold", dest="locvar_thresh",
-        type=float, default=0.4, help="Local variance (LV) threshold."
-        "High LV Sources have LV > 0.4 x image noise. Default is 0.4")
+        type=float, default=0.8, help="Local variance (LV) threshold."
+        "High LV Sources have LV > 0.8 x image noise. Default is 0.8")
 
     add("-pc_thr", "--psfcorr-threshold", dest="psfcorr_thresh", 
         type=float, default=0.5, help="Correlation factor (CF) threshold."
@@ -129,7 +129,7 @@ def main():
     add("-nrgn", "--neg-region", dest="neg_region", type=float, default=10,
         help="The size of a region to find -nneg. Default is 10.") 
 
-    add("-nphrm", "--phasecenter-remove", dest="phase_center_rm",
+    add("-phrm", "--phasecenter-remove", dest="phase_center_rm",
         type=float, default=None, help="The radius excluded from"
         " direction-dependent source selection. NB: this radius is wrt to"
         " the phase center. Default is None.")
