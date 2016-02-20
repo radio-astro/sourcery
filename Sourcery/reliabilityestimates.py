@@ -125,7 +125,9 @@ class load(object):
             utils.reshape_data(self.imagename, prefix=self.prefix)
 
         self.imagedata = numpy.array(imagedata, dtype=numpy.float32)
-        
+        self.image2by2 = numpy.array(utils.image_data(imagedata, prefix),
+                             dtype=numpy.float32)
+
         self.bmaj = numpy.deg2rad(self.header["BMAJ"])
 
         # boolean optionals    
@@ -142,8 +144,8 @@ class load(object):
             self.do_psf_corr = False
 
         if self.psfname:
-            self.psfdata, self.psfhdr = utils.open_psf_image(self.psfname)
-
+            psfdata, self.psfhdr = utils.open_psf_image(self.psfname)
+            self.psfdata = utils.image_data(psfdata, prefix)
  
         # computing negative noise
         self.noise = utils.negative_noise(self.imagedata, self.prefix) #here is 2X2 data here
@@ -162,7 +164,8 @@ class load(object):
         negativedata =  utils.invert_image(
                                self.imagename, self.imagedata,
                                self.header, self.negimage)
-
+        self.negimage2by2 = numpy.array(utils.image_data(negativedata, prefix),
+                             dtype=numpy.float32)
         self.negativedata = numpy.array(negativedata, numpy.float32)
        
         # smoothing factors
@@ -220,7 +223,7 @@ class load(object):
         naxis = self.header["NAXIS1"] 
         boundary = numpy.array([self.locstep, self.cfstep])
         trim_box = (boundary.max(), naxis - boundary.max(),
-                  boundary.max(), naxis- - boundary.max())
+                  boundary.max(), naxis - boundary.max())
              
         # source extraction
         utils.sources_extraction(
@@ -242,29 +245,28 @@ class load(object):
                 within = model.getSourcesNear(ra_r, dec_r, tolerance_r)   
                 for src in sorted(sources):
                     if src in within:
-                         sources.remove(src)
-
+                         model.sources.remove(src)
+        return model
     
-    def params(self, modelfits):
+
+    def params(self, modelfits, data_image):
      
         # reads in source finder output             
         data = pyfits.open(modelfits)[1].data
         tfile = tempfile.NamedTemporaryFile(suffix=".txt")
-        tfile.flush()
-        
+        tfile.flush() 
         # writes a catalogue in a temporaty txt file
         
         with open(tfile.name, "w") as std:
             std.write("#format:name ra_d dec_d i emaj_r emin_r pa_d\n")
 
         model = Tigger.load(tfile.name) # open a tmp. file
-
-        peak, total, area = [], [], []
-        positions = []
-        for i, src in enumerate(data):
-            ra, dec = data["RA"][i], data["DEC"][i]
+    
+        peak, total, area, loc, corr = [], [], [], [], []
+        for i in range(len(data)):
             flux = data["Total_flux"][i] 
             emaj, emin = data["Maj"][i], data["Min"][i]
+            ra, dec = data["RA"][i], data["DEC"][i]
             pa = data["PA"][i]
             name = "SRC%d"%i
 
@@ -285,29 +287,37 @@ class load(object):
 
             peak_flux = data["Peak_flux"][i]
 
-            # only accepts sources with flux > 0 and non-nan RA and DEC 
+            # only accepts sources with flux > 0 and not nan RA and DEC
+            # and local variance
             if flux > 0 and peak_flux > 0 and not math.isnan(float(ra))\
                 and not math.isnan(float(dec)):
-                  model.sources.append(srs) 
-                  peak.append(peak_flux)
-                  total.append(flux)
-                  area.append(srcarea)
-                  positions.append(pos)
-        model, loc = utils.compute_local_variance(self.imagedata, 
-                          model, positions, self.locstep,
-                          self.prefix)
-        if self.psfname:
-           model, corr = utils.compute_psf_correlation(self.imagedata, 
-                         self.psfdata, model=model, psfhdr=self.psfhdr,
-                         positions=positions, step=self.cfstep,
-                         prefix=self.prefix)
-        # removes sources in a given radius from the phase center
-        if self.radiusrm:
-            self.log.info(" Remove sources ra, dec, radius of  %r" 
-                          " from the phase center" %self.radiusrm)
-            self.remove_sources_within(model)
 
+                  local = utils.compute_local_variance(self.negimage2by2,
+                            pos, self.locstep)
+                  srs.setAttribute("l", local)
+                  if not math.isnan(float(local)) or local  > 0:
+                      if self.psfname:
+                          pdata, psf = utils.compute_psf_correlation(data_image,
+                                         self.psfdata, self.psfhdr, pos, self.cfstep)
 
+                          if len(pdata) == len(psf):
+                              c_region = numpy.corrcoef((pdata, psf))
+                              cf =  (numpy.diag((numpy.rot90(c_region))**2)
+                                           .sum())**0.5/2**0.5
+                              srs.setAttribute("cf", cf)
+                              corr.append(cf)
+                              model.sources.append(srs) 
+                              peak.append(peak_flux)
+                              total.append(flux)
+                              area.append(srcarea)
+                              loc.append(local)
+                      else:
+                          model.sources.append(srs) 
+                          peak.append(peak_flux)
+                          total.append(flux)
+                          area.append(srcarea)
+                          loc.append(local)
+    
         labels = dict(size=(0, "Log$_{10}$(Source area)"), 
                       peak=(1, "Log$_{10}$( Peak flux [Jy] )"), 
                       tot=(2, "Log$_{10}$( Total flux [Jy] )"))
@@ -357,6 +367,8 @@ class load(object):
 
             else:
                 out[i,...] =   area[i], peak[i], total[i]
+
+
         # removes the rows with 0s
         removezeros = (out == 0).sum(1)
         output = out[removezeros <= 0, :]
@@ -391,8 +403,8 @@ class load(object):
             os.system("rm -r %s"%self.negimage)
 
          
-        pmodel, positive, labels = self.params(pfile)
-        nmodel, negative, labels = self.params(nfile)
+        pmodel, positive, labels = self.params(pfile, self.image2by2)
+        nmodel, negative, labels = self.params(nfile, self.negimage2by2)
      
         # setting up a kernel, Gaussian kernel
         bandwidth = []
@@ -435,6 +447,12 @@ class load(object):
             savefig = self.prefix + "_planes.png"
             utils.plot(positive, negative, rel=rel, labels=labels,
                         savefig=savefig, prefix=self.prefix)
+
+        # removes sources in a given radius from the phase center
+        if self.radiusrm:
+            self.log.info(" Remove sources ra, dec, radius of  %r" 
+                          " from the phase center" %self.radiusrm)
+            pmodel = self.remove_sources_within(pmodel)
 
         return  pmodel, nmodel, self.noise, self.header
 

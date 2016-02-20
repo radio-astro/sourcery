@@ -1,7 +1,6 @@
-##Current version: 0.2.7
+##Current version: 0.2.8
 
 
-##From version 0.2.6 to 0.2.7, the changes made were;
+##From version 0.2.7 to 0.2.8, the changes made were;
 
-
-##### Computes local variance and correlation for all the sources at once and returns a list. Only uses imagedata, no more turning 2D inside the reliability script
+#### Threshold for local variance is 0.8 not 0.4. The local and PSF correlation are computed inside reliability script to solve assigning tags to wrong sources. 
