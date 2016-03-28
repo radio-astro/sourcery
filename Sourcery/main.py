@@ -82,7 +82,7 @@ def main():
         help="The area to compute the local variance, in beam sizes."
         " Default value is 10 beam sizes.")
      
-    add("-rel_rm", "--rel-sources-excl", dest="rel_src_excl", 
+    add("-rel_rm", "--rel-rmsrc", dest="rel_rmsrc", 
         action="append", default=None, help="Delete sources within a radius;"
         " e.g ra, dec, radius (in degrees). For more than"
         " one region: ra1,dec1,radius1:ra2,dec2,radius2. Default is None.")
@@ -131,7 +131,7 @@ def main():
 
     add("-phrm", "--phasecenter-remove", dest="phase_center_rm",
         type=float, default=None, help="The radius excluded from"
-        " direction-dependent source selection. NB: this radius is wrt to"
+        " direction-dependent source selection. NB: this radius is w.r.t to"
         " the phase center. Default is None.")
 
     add('-jc', '--json-config', dest='config', default=None,
@@ -148,13 +148,9 @@ def main():
     pybdsm_opts = dict([ items.split("=") for items in args.to_pybdsm ] ) \
                        if args.to_pybdsm else {}
 
-    if args.rel_src_excl:
-        rel_rmsrc = args.rel_src_excl[0].split(':')
-    else:
-        rel_rmsrc = None
-
     if not args.image:
         print("ATTENTION: No image provided. Aborting")
+        
 
     # making outdirectory
     def get_prefix(prefix, imagename, outdir):
@@ -268,7 +264,7 @@ def main():
                      args.source_finder, makeplots=args.do_relplots, 
                      do_psf_corr=args.add_psfcorr, do_local_var=args.add_locvar,
                      psf_corr_region=psfregion, local_var_region=locregion, 
-                     rel_excl_src=rel_rmsrc, pos_smooth=args.pos_smooth,
+                     rel_excl_src=args.rel_rmsrc, pos_smooth=args.pos_smooth,
                      neg_smooth=args.neg_smooth, loglevel=args.log_level, 
                      thresh_isl=args.thresh_isl, thresh_pix=args.thresh_pix,
                      neg_thresh_isl=args.neg_thresh_isl, neg_thresh_pix=

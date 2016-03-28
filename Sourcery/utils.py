@@ -25,7 +25,7 @@ matplotlib.rcParams.update({'font.size': 12})
 def logger(level=0, prefix=None):
     
     if not prefix:
-        logging.basicConfig()
+        logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
     else:
         name = prefix + ".log"
         logging.basicConfig(filename=name)  
@@ -122,13 +122,15 @@ def negative_noise(data, prefix=None):
     data = image_data(data, prefix)
     negative = data[data<0].flatten()
     noise = numpy.concatenate([negative,-negative]).std()
-
-    return noise
+    image_mean = numpy.concatenate([negative,-negative]).mean()
+    return noise, image_mean
 
 
 # inverts the image
-def invert_image(imagename, data, header, output):
-    
+def invert_image(imagename, data, header, output, prefix=None):
+
+    log = logger(level=0, prefix=prefix)
+    log.info(" We are now creating an inverted image and saving it to %s"%output)
     newdata = -data
     pyfits.writeto(output, newdata, header, clobber=True)
     return newdata
@@ -168,11 +170,11 @@ def thresh_mask(imagename, imagedata, output, hdr, thresh,
     imslice[-2:] = [slice(None)] * 2
     data = imagedata[imslice]
     
-    
+    log = logger(level=0, prefix=prefix)
     # If smooth is not specified, use a fraction of the beam
     
     if sigma:
-        noise = noise or negative_noise(data)
+        noise = noise or negative_noise(data)[0]
     else:
         noise = 1
 
@@ -181,6 +183,7 @@ def thresh_mask(imagename, imagedata, output, hdr, thresh,
     mask = numpy.ones(data.shape)
 
     if smooth:
+        log.info(" A masking threshold was set to %.2f"%(thresh/noise))
         emin = hdr["BMIN"]
         emaj = hdr["BMAJ"]
         cell = abs(hdr["CDELT1"])
@@ -194,17 +197,20 @@ def thresh_mask(imagename, imagedata, output, hdr, thresh,
                        smooth, [kk,kk])
             mask *= smooth < thresh
     else:
+        log.info(" No smoothing was made since the smooth was set to None")
         mask = data < thresh
     
     imagedata *= (mask==False)
     pyfits.writeto(output, imagedata, hdr, clobber=True)
 
     if savemask:
+        log.info(" Saving Masked images.")
         mask = (mask== False) * 1 
         ext = fits_ext(imagename)
         outmask = prefix + "-mask.fits" or  imagename.replace(ext,"-mask.fits")
         pyfits.writeto(outmask, mask, hdr, clobber=True)
-        return mask, noise
+        log.info(" Masking an image %s was succesfull"%imagename)
+        #return mask, noise
 
     return mask==False, noise
 
@@ -227,20 +233,22 @@ def sources_extraction(image, output=None,
     opts = {}
     opts.update(kw)
 
+    
     log = logger(level=0, prefix=prefix)     
-
+    log.info(" Source finding begins...")
     if sourcefinder_name.lower() == "pybdsm":
         from lofar import bdsm
         img = bdsm.process_image(image, group_by_isl=True, **kw)
         img.write_catalog(outfile=output, format="fits", 
                           catalog_type="gaul", clobber=True)
+    log.info(" Source finding was succesfully performed.")
     return output
 
 
 
 # computes the locala variance
 def compute_local_variance(imagedata, pos, step):
-
+     
     x, y = pos   
     subrgn = imagedata[abs(y-step) : y+step, abs(x-step) : x+step]
     subrgn = subrgn[subrgn > 0]
