@@ -25,9 +25,10 @@ class load(object):
                  makeplots=True, do_psf_corr=True, do_local_var=True,
                  psf_corr_region=5, local_var_region=10, rel_excl_src=None, 
                  pos_smooth=2, neg_smooth=2, loglevel=0, thresh_pix=5,
-                 thresh_isl=3, neg_thresh_isl=3, neg_thresh_pix=5,
-                 prefix=None, do_nearsources=False, increase_beam_cluster=False,
-                 savemask_pos=False, savemask_neg=False, **kw):
+                 thresh_isl=3, neg_thresh_isl=3, neg_thresh_pix=5, reset_rel=None,
+                 prefix=None, do_nearsources=False, savefits=False,
+                 increase_beam_cluster=False, savemask_pos=False, savemask_neg=False,
+                 **kw):
 
         """ Takes in image and extracts sources and makes 
             reliability estimations..
@@ -89,6 +90,10 @@ class load(object):
         savefits: boolean. Default is False.
             If True a negative image is saved.
 
+        reset_rel: boolean. Default is False. If true then
+            sources with correlation < 0.002 and rel >0.60
+            have their reliabilities set to 0.
+
         increase_beam_cluster: boolean, optional. If True, sources
             groupings will be increase by 20% the beam size. If False,
             the actual beam size will be used. Default is False.
@@ -137,7 +142,8 @@ class load(object):
         self.do_psf_corr = do_psf_corr
         self.savemaskpos = savemask_pos
         self.savemaskneg = savemask_neg
-        self.savefits = False
+        self.savefits = savefits
+        self.derel = reset_rel
 
         if not self.psfname:
             self.log.info(" No psf provided, do_psf_corr is set to False.")
@@ -312,6 +318,9 @@ class load(object):
                               cf =  (numpy.diag((numpy.rot90(c_region))**2)
                                            .sum())**0.5/2**0.5
                               srs.setAttribute("cf", cf)
+                              #srs.setAttribute("ex", emaj)
+                              #srs.setAttribute("ey", emin)
+                              #srs.setAttribute("I_err", data["E_Total_flux"][i])
                               corr.append(cf)
                               model.sources.append(srs) 
                               peak.append(peak_flux)
@@ -320,6 +329,9 @@ class load(object):
                               loc.append(local)
                       else:
                           model.sources.append(srs) 
+                          #srs.setAttribute("ex", emaj)
+                          #srs.setAttribute("ey", emin)
+                          #srs.setAttribute("I_err", data["E_Total_flux"][i])
                           peak.append(peak_flux)
                           total.append(flux)
                           area.append(srcarea)
@@ -451,10 +463,10 @@ class load(object):
 
         # remove sources with poor correlation and high reliability,
         # the values are currently arbitrary
-        if self.do_psf_corr:
+        if self.do_psf_corr and self.derel:
             for s in pmodel.sources:
                 cf, r = s.cf, s.rel
-                if cf < 0.01 and r > 0.70:
+                if cf < 0.002 and r > 0.60:
                     s.rel = 0.0    
 
         if self.makeplots:

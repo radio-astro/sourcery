@@ -67,8 +67,9 @@ def main():
         default=True, help="Make reliability density plot. Default is True."
         " To disable add -dmp on the command line.")
  
-    add("-rel", "--rel-thresh", dest="rel_thresh", default=None, type=float, 
-        help= "Sets a reliability threshold. Default is None.")
+    add("-drel", "--reset-rel", dest="reset_rel", action="store_true",
+        default=False, help=" Assigns R=0 for sources with cf < 0.002 and" 
+        "R > 0.60.")
 
     add("-beam", "--beam-cluster", dest="do_beam", default=False,
         action="store_true", help= "Increases the Gaussian groupings by 20 percent the"
@@ -268,7 +269,7 @@ def main():
                      neg_smooth=args.neg_smooth, loglevel=args.log_level, 
                      thresh_isl=args.thresh_isl, thresh_pix=args.thresh_pix,
                      neg_thresh_isl=args.neg_thresh_isl, neg_thresh_pix=
-                     args.neg_thresh_pix, prefix=prefix,  
+                     args.neg_thresh_pix, prefix=prefix, reset_rel=args.reset_rel, 
                      do_nearsources=args.do_nearsources, increase_beam_cluster=
                      args.do_beam, savemask_neg=args.savemask_neg,
                      savemask_pos=args.savemask_pos, **pybdsm_opts)
