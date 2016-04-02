@@ -25,9 +25,10 @@ class load(object):
                  makeplots=True, do_psf_corr=True, do_local_var=True,
                  psf_corr_region=5, local_var_region=10, rel_excl_src=None, 
                  pos_smooth=2, neg_smooth=2, loglevel=0, thresh_pix=5,
-                 thresh_isl=3, neg_thresh_isl=3, neg_thresh_pix=5,
-                 prefix=None, do_nearsources=False, increase_beam_cluster=False,
-                 savemask_pos=False, savemask_neg=False, **kw):
+                 thresh_isl=3, neg_thresh_isl=3, neg_thresh_pix=5, reset_rel=None,
+                 prefix=None, do_nearsources=False, savefits=False,
+                 increase_beam_cluster=False, savemask_pos=False, savemask_neg=False,
+                 **kw):
 
         """ Takes in image and extracts sources and makes 
             reliability estimations..
@@ -89,6 +90,10 @@ class load(object):
         savefits: boolean. Default is False.
             If True a negative image is saved.
 
+        reset_rel: boolean. Default is False. If true then
+            sources with correlation < 0.002 and rel >0.60
+            have their reliabilities set to 0.
+
         increase_beam_cluster: boolean, optional. If True, sources
             groupings will be increase by 20% the beam size. If False,
             the actual beam size will be used. Default is False.
@@ -137,7 +142,8 @@ class load(object):
         self.do_psf_corr = do_psf_corr
         self.savemaskpos = savemask_pos
         self.savemaskneg = savemask_neg
-        self.savefits = False
+        self.savefits = savefits
+        self.derel = reset_rel
 
         if not self.psfname:
             self.log.info(" No psf provided, do_psf_corr is set to False.")
@@ -148,7 +154,7 @@ class load(object):
             self.psfdata = utils.image_data(psfdata, prefix)
  
         # computing negative noise
-        self.noise = utils.negative_noise(self.imagedata, self.prefix) #here is 2X2 data here
+        self.noise, self.mean = utils.negative_noise(self.imagedata, self.prefix) #here is 2X2 data here
         
         self.log.info(" The negative noise is %e Jy/beam"%self.noise)
         if self.noise == 0: 
@@ -163,7 +169,7 @@ class load(object):
         
         negativedata =  utils.invert_image(
                                self.imagename, self.imagedata,
-                               self.header, self.negimage)
+                               self.header, self.negimage, prefix)
         self.negimage2by2 = numpy.array(utils.image_data(negativedata, prefix),
                              dtype=numpy.float32)
         self.negativedata = numpy.array(negativedata, numpy.float32)
@@ -178,12 +184,7 @@ class load(object):
         self.radiusrm = rel_excl_src
         self.do_beam = increase_beam_cluster
          
-
-        # conversion
-        self.d2r = math.pi/180.0
-        self.r2d = 180.0/math.pi
-
-        beam_pix = int(round(self.bmaj * self.r2d/self.pixelsize))
+        beam_pix = int(round(numpy.rad2deg(self.bmaj)/self.pixelsize))
         self.locstep = self.localstep * beam_pix
         self.cfstep = self.corrstep * beam_pix
         self.bmin, self.bpa =  self.header["BMIN"], self.header["BPA"]
@@ -206,14 +207,16 @@ class load(object):
         self.opts_neg["thresh_isl"] = self.neg_thresh_isl
         self.opts_neg["thresh_pix"] = self.neg_thresh_pix
  
-
+     
     def source_finder(self, image=None, imagedata=None, thresh=None, prefix=None,
                       noise=None, output=None, savemask=None, **kw):
         
         ext = utils.fits_ext(image)
         tpos = tempfile.NamedTemporaryFile(suffix="."+ext, dir=".")
         tpos.flush()
-        
+        kwards = {}
+        #kw.update(kwards)
+
         # data smoothing
         mask, noise = utils.thresh_mask(image, 
                           imagedata, tpos.name, hdr=self.header,
@@ -224,24 +227,29 @@ class load(object):
         boundary = numpy.array([self.locstep, self.cfstep])
         trim_box = (boundary.max(), naxis - boundary.max(),
                   boundary.max(), naxis - boundary.max())
-             
+
+        # using the masked image for forming islands
+        kwards["detection_image"] = tpos.name
+        kw.update(kwards)
+
         # source extraction
         utils.sources_extraction(
-             image=tpos.name, output=output, 
-             sourcefinder_name=self.sourcefinder_name, 
-             blank_limit=self.noise/1000.0, trim_box=trim_box, prefix=self.prefix,
-             **kw)
+             image=image, output=output, 
+             sourcefinder_name=self.sourcefinder_name,
+             blank_limit=self.noise/1.0e5, trim_box=trim_box,
+             prefix=self.prefix, **kw)
         tpos.close()
 
 
     def remove_sources_within(self, model):
         
         sources = model.sources
-        for i in range(len(self.radiusrm)):
-                ra, dec, tolerance = self.radiusrm[i].split(",")
-                ra_r =  float(ra) * self.d2r
-                dec_r =  float(dec) * self.d2r
-                tolerance_r = float(tolerance) * self.d2r
+        rel_remove = self.radiusrm[0].split(":")
+        for i in range(len(rel_remove)):
+                ra, dec, tolerance = rel_remove[i].split(",")
+                ra_r =  numpy.deg2rad(float(ra))
+                dec_r =  numpy.deg2rad(float(dec))
+                tolerance_r = numpy.deg2rad(float(tolerance))
                 within = model.getSourcesNear(ra_r, dec_r, tolerance_r)   
                 for src in sorted(sources):
                     if src in within:
@@ -255,40 +263,45 @@ class load(object):
         data = pyfits.open(modelfits)[1].data
         tfile = tempfile.NamedTemporaryFile(suffix=".txt")
         tfile.flush() 
+
         # writes a catalogue in a temporaty txt file
-        
         with open(tfile.name, "w") as std:
-            std.write("#format:name ra_d dec_d i emaj_r emin_r pa_d\n")
+            std.write("#format:name ra_rad dec_rad i emaj_r emin_r pa_r\n")
 
         model = Tigger.load(tfile.name) # open a tmp. file
     
         peak, total, area, loc, corr = [], [], [], [], []
         for i in range(len(data)):
             flux = data["Total_flux"][i] 
-            emaj, emin = data["Maj"][i], data["Min"][i]
+            dc_emaj, dc_emin = data["DC_Maj"][i], data["DC_Min"][i]
             ra, dec = data["RA"][i], data["DEC"][i]
-            pa = data["PA"][i]
+            pa = data["DC_PA"][i]
             name = "SRC%d"%i
-
-            pos = [self.wcs.wcs2pix(*(ra, dec))][0] #deg to pixel
-            
-            posrd =  ModelClasses.Position(ra*self.d2r, dec*self.d2r)
-            flux_I = ModelClasses.Polarization(flux, 0, 0, 0)
-            shape = ModelClasses.Gaussian(emaj*self.d2r, emin*self.d2r, pa*self.d2r)
-            srs = SkyModel.Source(name, posrd, flux_I, shape=shape)
-           
-            # area: find ex and ey if are 0 assign beam size
-            if emaj or emin == 0:
-                srcarea = math.pi * (self.bmaj * self.r2d) * pow(3600.0,-2) *\
-                       (self.bmin *  self.r2d) 
-            if  emaj and emin > 0: 
-                srcarea = emaj * emin * math.pi * pow(3600.0,-2)
-            
-
             peak_flux = data["Peak_flux"][i]
 
+            posrd =  ModelClasses.Position(numpy.deg2rad(ra), numpy.deg2rad(dec))
+            flux_I = ModelClasses.Polarization(flux, 0, 0, 0)
+            if dc_emaj == 0 and dc_emin == 0: 
+                shape = None
+            else:
+                shape = ModelClasses.Gaussian(numpy.deg2rad(dc_emaj), numpy.deg2rad(dc_emin),
+                                         numpy.deg2rad(pa))
+            
+            srs = SkyModel.Source(name, posrd, flux_I, shape=shape)
+            
+            # using convolved maj and min for reliability estimate
+            emaj, emin = data["Maj"][i], data["Min"][i]
+
+            # area: find ex and ey if are 0 assign beam size
+            if emaj or emin == 0:
+                srcarea = math.pi * (numpy.rad2deg(self.bmaj)) * pow(3600.0, 2) *\
+                       (numpy.rad2deg(self.bmin)) 
+            if  emaj and emin > 0: 
+                srcarea = emaj * emin * math.pi * pow(3600.0, 2) # arcsecond
+            
             # only accepts sources with flux > 0 and not nan RA and DEC
             # and local variance
+            pos = [self.wcs.wcs2pix(*(ra, dec))][0] #positions from deg to pixel
             if flux > 0 and peak_flux > 0 and not math.isnan(float(ra))\
                 and not math.isnan(float(dec)):
 
@@ -305,6 +318,9 @@ class load(object):
                               cf =  (numpy.diag((numpy.rot90(c_region))**2)
                                            .sum())**0.5/2**0.5
                               srs.setAttribute("cf", cf)
+                              #srs.setAttribute("ex", emaj)
+                              #srs.setAttribute("ey", emin)
+                              #srs.setAttribute("I_err", data["E_Total_flux"][i])
                               corr.append(cf)
                               model.sources.append(srs) 
                               peak.append(peak_flux)
@@ -313,6 +329,9 @@ class load(object):
                               loc.append(local)
                       else:
                           model.sources.append(srs) 
+                          #srs.setAttribute("ex", emaj)
+                          #srs.setAttribute("ey", emin)
+                          #srs.setAttribute("I_err", data["E_Total_flux"][i])
                           peak.append(peak_flux)
                           total.append(flux)
                           area.append(srcarea)
@@ -334,7 +353,6 @@ class load(object):
         nsrc = len(model.sources)
         out = numpy.zeros([nsrc, len(labels)])         
          
-
         # returning parameters
         for i, src in enumerate(model.sources):
 
@@ -376,7 +394,6 @@ class load(object):
         return model, numpy.log10(output), labels 
 
 
-
     def get_reliability(self):
 
 
@@ -399,7 +416,7 @@ class load(object):
 
         self.log.info(" Source Finder completed successfully ")
         if not self.savefits:
-            self.log.info("Deleting the negative image.")
+            self.log.info(" Deleting the negative image.")
             os.system("rm -r %s"%self.negimage)
 
          
@@ -416,12 +433,12 @@ class load(object):
         cov = numpy.zeros([nplanes, nplanes])
         nnsrc = len(negative)
         npsrc = len(positive)
-
+        
+        self.log.info(" There are %d positive and %d negtive detections "%(npsrc, nnsrc))
+ 
         if nnsrc == 0 or npsrc ==0:
-            self.log.info("The resulting array has length of 0 thus cannot compute"
+            self.log.error("The resulting array has length of 0 thus cannot compute"
                     " the reliability. Aborting.")
-        self.log.info(" There are %s positive detections "%npsrc)
-        self.log.info(" There are %s negative detections "%nnsrc)
 
         self.log.info(" Computing the reliabilities ")
         for i in range(nplanes):
@@ -429,6 +446,7 @@ class load(object):
                 if i == j:
                     cov[i, j] = bandwidth[i]*((4.0/((nplanes+2)*
                                   nnsrc))**(1.0/(nplanes+4.0)))
+        self.log.info("The resulting covariance matrix is %r"%cov)
 
         pcov = utils.gaussian_kde_set_covariance(positive.T, cov)
         ncov = utils.gaussian_kde_set_covariance(negative.T, cov)
@@ -442,7 +460,15 @@ class load(object):
         for src, rf in zip(pmodel.sources, rel):
             src.setAttribute("rel", rf)
         self.log.info(" Saved the reliabilities values.")
-        
+
+        # remove sources with poor correlation and high reliability,
+        # the values are currently arbitrary
+        if self.do_psf_corr and self.derel:
+            for s in pmodel.sources:
+                cf, r = s.cf, s.rel
+                if cf < 0.002 and r > 0.60:
+                    s.rel = 0.0    
+
         if self.makeplots:
             savefig = self.prefix + "_planes.png"
             utils.plot(positive, negative, rel=rel, labels=labels,
