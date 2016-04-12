@@ -308,6 +308,8 @@ class load(object):
                   local = utils.compute_local_variance(self.negimage2by2,
                             pos, self.locstep)
                   srs.setAttribute("l", local)
+
+                  
                   if not math.isnan(float(local)) or local  > 0:
                       if self.psfname:
                           pdata, psf = utils.compute_psf_correlation(data_image,
@@ -318,9 +320,6 @@ class load(object):
                               cf =  (numpy.diag((numpy.rot90(c_region))**2)
                                            .sum())**0.5/2**0.5
                               srs.setAttribute("cf", cf)
-                              #srs.setAttribute("ex", emaj)
-                              #srs.setAttribute("ey", emin)
-                              #srs.setAttribute("I_err", data["E_Total_flux"][i])
                               corr.append(cf)
                               model.sources.append(srs) 
                               peak.append(peak_flux)
@@ -329,9 +328,6 @@ class load(object):
                               loc.append(local)
                       else:
                           model.sources.append(srs) 
-                          #srs.setAttribute("ex", emaj)
-                          #srs.setAttribute("ey", emin)
-                          #srs.setAttribute("I_err", data["E_Total_flux"][i])
                           peak.append(peak_flux)
                           total.append(flux)
                           area.append(srcarea)
@@ -466,7 +462,7 @@ class load(object):
         if self.do_psf_corr and self.derel:
             for s in pmodel.sources:
                 cf, r = s.cf, s.rel
-                if cf < 0.002 and r > 0.60:
+                if cf < 0.006 and r > 0.60:
                     s.rel = 0.0    
 
         if self.makeplots:
@@ -480,5 +476,5 @@ class load(object):
                           " from the phase center" %self.radiusrm)
             pmodel = self.remove_sources_within(pmodel)
 
-        return  pmodel, nmodel, self.noise, self.header
+        return  pmodel, nmodel, self.image2by2, self.header, self.locstep
 

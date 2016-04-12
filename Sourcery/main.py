@@ -150,7 +150,8 @@ def main():
                        if args.to_pybdsm else {}
 
     if not args.image:
-        print("ATTENTION: No image provided. Aborting")
+        print("ATTENTION: No image provided. Unless specified inside JSON file otherwise"
+              " the execution is aborted")
         
 
     # making outdirectory
@@ -210,16 +211,17 @@ def main():
 
                 reldict["prefix"]  = prefix
                 mc = rel.load(image, psf, **reldict)
-                pmodel, nmodel, noise, hdr = mc.get_reliability()
+                pmodel, nmodel, data, hdr, step = mc.get_reliability()
 
                 ddict["pmodel"] = pmodel
                 ddict["nmodel"] = nmodel
                 ddict["prefix"] = prefix
-                ddict["noise"] = noise
+                ddict["imagedata"] = data
                 ddict["header"] = hdr
+                ddict["local_step"] = step
 
                 if enable:
-                    dc = dd.load(image, psfname=psf, **ddict)
+                    dc = dd.load( psfname=psf, **ddict)
                     pmodel, nmodel  = dc.source_selection()
 
         else:
@@ -229,16 +231,18 @@ def main():
 
             reldict["prefix"]  = prefix 
             mc = rel.load(image, psf, **reldict)
-            pmodel, nmodel, noise, hdr = mc.get_reliability()
+            pmodel, nmodel, data, hdr, step = mc.get_reliability()
 
             ddict["pmodel"] = pmodel
             ddict["nmodel"] = nmodel
             ddict["prefix"] = prefix
-            ddict["noise"]  = noise
+            ddict["imagedata"]  = data
             ddict["header"] = hdr
+            ddict["local_step"] = step
+            
 
             if enable:
-                dc = dd.load(image, psfname=psf, **ddict)
+                dc = dd.load(psfname=psf, **ddict)
                 pmodel, nmodel = dc.source_selection()
 
         pmodel.save( prefix+".lsm.html")
@@ -275,14 +279,14 @@ def main():
                      savemask_pos=args.savemask_pos, **pybdsm_opts)
 
             # assignign reliability values
-            pmodel, nmodel, noise, hdr = mc.get_reliability()
+            pmodel, nmodel, data, hdr, step = mc.get_reliability()
 
             # direction dependent detection tagging
             
-            dc = dd.load(imagename=image, psfname=psf, pmodel=pmodel, nmodel=nmodel,
-                    header=hdr, snr_thresh=args.snr_thresh, local_thresh=args.locvar_thresh, 
+            dc = dd.load(imagedata=data, psfname=psf, pmodel=pmodel, nmodel=nmodel,
+                    header=hdr, local_step=step, snr_thresh=args.snr_thresh,
                     high_corr_thresh=args.psfcorr_thresh, negdetec_region=
-                    args.neg_region, negatives_thresh=args.num_negatives, noise=noise,
+                    args.neg_region, negatives_thresh=args.num_negatives,
                     phasecenter_excl_radius=args.phase_center_rm, prefix=prefix,
                     loglevel=args.log_level)
             # tagging

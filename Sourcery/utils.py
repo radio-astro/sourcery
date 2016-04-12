@@ -226,7 +226,7 @@ def sources_extraction(image, output=None,
        results into a Tigger model and writes it to output.
 
     image :  Fits image data
-    output : Tigger format, default image name.lsm.html
+    ou
         A Catalog name to store the extracted sources
     """
     # start with default PYBDSM options
@@ -241,6 +241,7 @@ def sources_extraction(image, output=None,
         img = bdsm.process_image(image, group_by_isl=True, **kw)
         img.write_catalog(outfile=output, format="fits", 
                           catalog_type="gaul", clobber=True)
+
     log.info(" Source finding was succesfully performed.")
     return output
 
