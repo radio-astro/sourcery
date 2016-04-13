@@ -8,6 +8,7 @@ import direcdepen as dd
 import os
 import datetime
 import json
+import utils
 
 
 
@@ -36,6 +37,9 @@ def main():
 
     add("-p", "--psfimage", dest="psf", default=None,
         help="Point Spread Function (PSF) Fits image name. Default = None")
+
+    add("-ds", "--disable-smoothing", dest="disable_smoothing", action="store_true", 
+        help="Smmoth data before running source finder")
 
     add("-s", "--source-finder", dest="source_finder", default="pybdsm",
         help="Source finder name. Default='pybdsm'")
@@ -276,15 +280,16 @@ def main():
                      args.neg_thresh_pix, prefix=prefix, reset_rel=args.reset_rel, 
                      do_nearsources=args.do_nearsources, increase_beam_cluster=
                      args.do_beam, savemask_neg=args.savemask_neg,
-                     savemask_pos=args.savemask_pos, **pybdsm_opts)
+                     savemask_pos=args.savemask_pos,
+                     no_smooth=args.disable_smoothing, **pybdsm_opts)
 
             # assignign reliability values
-            pmodel, nmodel, data, hdr, step = mc.get_reliability()
+            pmodel, nmodel, step = mc.get_reliability()
 
             # direction dependent detection tagging
             
-            dc = dd.load(imagedata=data, psfname=psf, pmodel=pmodel, nmodel=nmodel,
-                    header=hdr, local_step=step, snr_thresh=args.snr_thresh,
+            dc = dd.load(imagename=image, psfname=psf, pmodel=pmodel, nmodel=nmodel,
+                    local_step=step, snr_thresh=args.snr_thresh,
                     high_corr_thresh=args.psfcorr_thresh, negdetec_region=
                     args.neg_region, negatives_thresh=args.num_negatives,
                     phasecenter_excl_radius=args.phase_center_rm, prefix=prefix,
@@ -293,5 +298,7 @@ def main():
             pmodel, nmodel = dc.source_selection()
             pmodel.save( prefix+".lsm.html")
             nmodel.save( prefix+"_negative.lsm.html")
+            utils.xrun("tigger-convert", ["--rename -f", prefix + ".lsm.html"])
 
-    os.system("rm -r tmp*.log")
+    #TODO(lerato) This is not a good idea. This will delete user log files that match this pattern!
+    #os.system("rm -r tmp*.log")

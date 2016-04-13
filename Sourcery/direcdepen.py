@@ -10,11 +10,12 @@ import utils
 import numpy
 import math
 from astLib.astWCS import WCS
+import pyfits
 
 class load(object):
 
 
-    def __init__(self, imagedata, psfname, pmodel, nmodel, header, local_step=10,
+    def __init__(self, imagename, psfname, pmodel, nmodel, local_step=10,
                  snr_thresh=40, high_corr_thresh=0.5, negdetec_region=10,
                  negatives_thresh=5, phasecenter_excl_radius=None,
                  prefix=None, loglevel=0):
@@ -64,7 +65,6 @@ class load(object):
         self.pmodel = pmodel
         self.nmodel = nmodel
         self.psfname =  psfname
-        self.hdr = header
   
         self.log.info(" Loading image data")
 
@@ -76,9 +76,13 @@ class load(object):
         #self.localthresh = local_thresh
         self.corrthresh = high_corr_thresh
         self.negthresh = negatives_thresh
+        
+        with pyfits.open(imagename) as hdu:
+            self.hdr = hdu[0].header
+            self.data = utils.image_data(hdu[0].data)
+
         self.wcs = WCS(self.hdr, mode="pyfits")
         
-        self.data = imagedata
         self.locstep = local_step
 
         #regions
