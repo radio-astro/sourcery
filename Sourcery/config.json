@@ -9,6 +9,7 @@
        "do_psf_corr" : true,
        "do_local_var" : true,
        "do_nearsources": true,
+       "no_smooth": false,
        "reset_rel": true,
        "psf_corr_region" : 5,
        "local_var_region" : 10,

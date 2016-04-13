@@ -215,13 +215,12 @@ def main():
 
                 reldict["prefix"]  = prefix
                 mc = rel.load(image, psf, **reldict)
-                pmodel, nmodel, data, hdr, step = mc.get_reliability()
+                pmodel, nmodel, step = mc.get_reliability()
 
                 ddict["pmodel"] = pmodel
                 ddict["nmodel"] = nmodel
                 ddict["prefix"] = prefix
-                ddict["imagedata"] = data
-                ddict["header"] = hdr
+                ddict["imagename"] = image
                 ddict["local_step"] = step
 
                 if enable:
@@ -235,13 +234,12 @@ def main():
 
             reldict["prefix"]  = prefix 
             mc = rel.load(image, psf, **reldict)
-            pmodel, nmodel, data, hdr, step = mc.get_reliability()
+            pmodel, nmodel, step = mc.get_reliability()
 
             ddict["pmodel"] = pmodel
             ddict["nmodel"] = nmodel
             ddict["prefix"] = prefix
-            ddict["imagedata"]  = data
-            ddict["header"] = hdr
+            ddict["imagename"]  = image
             ddict["local_step"] = step
             
 
