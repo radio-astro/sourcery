@@ -90,12 +90,10 @@ class load(object):
         self.negregion =  negdetec_region # region to look for negatives
         
        # conversion
-        self.r2d = 180.0/math.pi
-        self.d2r = math.pi/180.0
         self.bmaj = self.hdr["BMAJ"] # in degrees
         
-        self.ra0 =  self.hdr["CRVAL1"] * self.d2r
-        self.dec0 = self.hdr["CRVAL2"] * self.d2r
+        self.ra0 =  numpy.deg2rad(self.hdr["CRVAL1"])
+        self.dec0 = numpy.deg2rad(self.hdr["CRVAL2"])
         
 
     def number_negatives(self, source):
@@ -103,7 +101,7 @@ class load(object):
 
         #sources = filter(lambda src: src.getTag(tag), psources)
 
-        tolerance = self.negregion * self.bmaj * self.d2r
+        tolerance = numpy.deg2rad(self.negregion * self.bmaj)
 
         if self.phaserad:
             radius = numpy.deg2rad(self.phaserad * self.bmaj)
@@ -136,13 +134,17 @@ class load(object):
         noise, mean = utils.negative_noise(self.data, self.prefix)
         for srs in sources:
             pos = map(lambda rad: numpy.rad2deg(rad),(srs.pos.ra,srs.pos.dec))
-            positions = self.wcs.wcs2pix(*pos) # from degs to pixels 
-            local_noise = self.local_noise(positions) # Local noise
-            signal_to_noise = srs.flux.I/local_noise # source SNR
-            thresh = self.snr_factor * noise # uses the Global Noise
+            positions = self.wcs.wcs2pix(*pos)
+
+			# local noise, determining SNR using the local noise
+			# threshold is determined using the global noise 
+            local_noise = self.local_noise(positions)
+            signal_to_noise = srs.flux.I/local_noise
+            thresh = self.snr_factor * noise
+
             if signal_to_noise > thresh and srs.rel > 0.99:
                 if self.psfname:
-                    corr = srs.cf
+                    corr = srs.correlation_factor
                     if corr > self.corrthresh:
                         self.number_negatives(srs)
 

@@ -33,32 +33,32 @@ def main():
         "{:s} version {:s}".format(parser.prog, __version__))
    
     add("-i", "--image", dest="image",
-        help="FITS image name")
+        help=" FITS image name")
 
     add("-p", "--psfimage", dest="psf", default=None,
-        help="Point Spread Function (PSF) Fits image name. Default = None")
+        help=" Point Spread Function (PSF) Fits image name. Default = None")
 
     add("-ds", "--disable-smoothing", dest="disable_smoothing", action="store_true", 
-        help="Smmoth data before running source finder")
+        help=" Smooth data before running source finder.")
 
     add("-s", "--source-finder", dest="source_finder", default="pybdsm",
-        help="Source finder name. Default='pybdsm'")
+        help=" Source finder name. Default='pybdsm'.")
 
     add("--to-pybdsm", dest="to_pybdsm", action="append",
-           help="PyBDSM process_image options" 
+           help=" PyBDSM process_image options" 
            " [may be specified multiple times]. E.g thresh_pix=1 etc.")
 
     add("-log", "--log-level",dest="log_level", type=int, default=0,
-        help="Python logging module, where info=0, debug=1, critial=2 and abort=3")
+        help=" Python logging module, where info=0, debug=1, critial=2 and abort=3.")
 
     add("-od", "--output-dir", dest="outdir", default=None, 
-        help="Output products will be dumped here. System Default will be generated")
+        help=" Output products will be dumped here. System Default will be generated.")
 
     add("-pref", "-dir-prefix", dest="prefix", default=None, 
-        help="Prefix for output products. System default will be generated")
+        help=" Prefix for output products. System default will be generated.")
 
     add("-apsf", "--add-psfcorr", dest="add_psfcorr", action="store_true",
-        default=False, help="Adds PSF correlation for density estimations. The PSF "
+        default=False, help=" Adds PSF correlation for density estimations. The PSF "
         " image must be provided. Default is False. To set True add -apsf")
 
     add("-alv", "--add-localvar", dest="add_locvar", action="store_true",
@@ -68,7 +68,7 @@ def main():
         default=False, help=" Adds number of neighbours for density estimations. See -apsf")
 
     add("-dmp", "--do-relplots", dest="do_relplots", action="store_false",
-        default=True, help="Make reliability density plot. Default is True."
+        default=True, help=" Make reliability density plot. Default is True."
         " To disable add -dmp on the command line.")
  
     add("-drel", "--reset-rel", dest="reset_rel", action="store_true",
@@ -76,52 +76,48 @@ def main():
         "R > 0.60.")
 
     add("-beam", "--beam-cluster", dest="do_beam", default=False,
-        action="store_true", help= "Increases the Gaussian groupings by 20 percent the"
+        action="store_true", help= " Increases the Gaussian groupings by 20 percent the"
         " beam size. Default is False.")
  
     add("-pcr", "--psfcorr-region",  dest="psfcorr_region", type=int,
-        default=5, help="The size of the region to correlate, in beam sizes."
+        default=5, help=" The size of the region to correlate, in beam sizes."
         " Default value is 5 beam sizes.")
   
     add("-lr", "--local-region", dest="local_region", default=10,
-        help="The area to compute the local variance, in beam sizes."
+        help=" The area to compute the local variance, in beam sizes."
         " Default value is 10 beam sizes.")
      
     add("-rel_rm", "--rel-rmsrc", dest="rel_rmsrc", 
-        action="append", default=None, help="Delete sources within a radius;"
+        action="append", default=None, help=" Delete sources within a radius;"
         " e.g ra, dec, radius (in degrees). For more than"
         " one region: ra1,dec1,radius1:ra2,dec2,radius2. Default is None.")
 
     add("-ps", "--positive-smooth", dest="pos_smooth", type=float, default=2.0, 
         help=" Masking threshold in the positive image, e.g pixels 2x noise"
-        "will be masked. Default is 2.0.")
+        " will be masked. Default is 2.0.")
 
     add("-ns", "--negative-smooth", dest="neg_smooth", type=float, default=2.0, 
-        help="Similar to -ps. Applied to negative image")
+        help=" Similar to -ps. Applied to negative image.")
 
     add('-pisl', "--thresh-isl", dest="thresh_isl", type=float, default=3,
         help=" Source finding threshold for forming islands. For positive image."
-         "  Default is 3.")
+         " Default is 3.")
 
     add("-ppix", "--thresh-pix", dest="thresh_pix", type=float, default=5,
-        help="Source finding threshold for model fitting. For positive image."
-        "Default is 5.")
+        help=" Source finding threshold for model fitting. For positive image."
+        " Default is 5.")
  
     add("-nisl", "--negthreshold-isl", dest="neg_thresh_isl",
-        type=float, default=3, help="Similar to -pisl but applied"
+        type=float, default=3, help=" Similar to -pisl but applied"
         " to the negative image. Default is 3.")
 
     add("-npix", "--negthreshold-pix", dest="neg_thresh_pix",
-        type=float, default=5, help="Similar to -ppix but applied"
+        type=float, default=5, help=" Similar to -ppix but applied"
         " for negative image. Default is 5.")
 
     add("-snr_thr", "--snr-threshold", dest="snr_thresh", type=float,
-        default=40, help="SNR threshold. High SNR Sources have SNR > 40x min(SNR)"
+        default=40, help=" SNR threshold. High SNR Sources have SNR > 40x min(SNR)"
         " Default is 40.")
-
-    add("-loc_thr", "--localvar-threshold", dest="locvar_thresh",
-        type=float, default=0.8, help="Local variance (LV) threshold."
-        "High LV Sources have LV > 0.8 x image noise. Default is 0.8")
 
     add("-pc_thr", "--psfcorr-threshold", dest="psfcorr_thresh", 
         type=float, default=0.5, help="Correlation factor (CF) threshold."
@@ -298,5 +294,4 @@ def main():
             nmodel.save( prefix+"_negative.lsm.html")
             utils.xrun("tigger-convert", ["--rename -f", prefix + ".lsm.html"])
 
-    #TODO(lerato) This is not a good idea. This will delete user log files that match this pattern!
-    #os.system("rm -r tmp*.log")
+            #TODO: delete any file that is not needed

@@ -313,7 +313,7 @@ class load(object):
                   local = utils.compute_local_variance(negdata,
                             pos, self.locstep)
 
-                  srs.setAttribute("l", local)
+                  srs.setAttribute("local_variance", local)
 
                   
                   if not math.isnan(float(local)) or local  > 0:
@@ -326,7 +326,7 @@ class load(object):
                               cf =  (numpy.diag((numpy.rot90(c_region))**2)
                                            .sum())**0.5/2**0.5
 
-                              srs.setAttribute("cf", cf)
+                              srs.setAttribute("correlation_factor", cf)
                               corr.append(cf)
                               model.sources.append(srs) 
                               peak.append(peak_flux)
@@ -364,7 +364,7 @@ class load(object):
             near = model.getSourcesNear(ra, dec, 5 * self.bmaj)
             nonear = len(near) 
             if self.nearsources:
-                src.setAttribute("n", nonear)
+                src.setAttribute("neibours", nonear)
 
             if self.do_psf_corr and self.do_local_var and self.nearsources:
                  out[i,...] =  area[i], peak[i], total[i], corr[i], loc[i], nonear
@@ -467,7 +467,7 @@ class load(object):
         # the values are currently arbitrary
         if self.do_psf_corr and self.derel:
             for s in pmodel.sources:
-                cf, r = s.cf, s.rel
+                cf, r = s.correlation_factor, s.rel
                 if cf < 0.006 and r > 0.60:
                     s.rel = 0.0    
 
