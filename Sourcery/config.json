@@ -11,6 +11,7 @@
        "do_nearsources": true,
        "no_smooth": false,
        "reset_rel": true,
+	   "saveformat": "gaul",
        "psf_corr_region" : 5,
        "local_var_region" : 10,
        "rel_excl_src" : null,

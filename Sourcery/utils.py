@@ -241,14 +241,14 @@ def sources_extraction(image, output=None,
     opts = {}
     opts.update(kw)
 
-    
+    catalogue_format = output.split(".")[-2]
     log = logger(level=0, prefix=prefix)     
     log.info(" Source finding begins...")
     if sourcefinder_name.lower() == "pybdsm":
         from lofar import bdsm
-        img = bdsm.process_image(image, group_by_isl=True, **kw)
+        img = bdsm.process_image(image, group_by_isl=True, **kw) 
         img.write_catalog(outfile=output, format="fits", 
-                          catalog_type="gaul", clobber=True)
+                          catalog_type=catalogue_format, clobber=True)
 
     log.info(" Source finding was succesfully performed.")
     return output

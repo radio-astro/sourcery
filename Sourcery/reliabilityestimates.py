@@ -1,7 +1,7 @@
 # Reliability estimation script
 # Lerato Sebokolodi <mll.sebokolodi@gmail.com>
 
-
+		
 
 import matplotlib
 matplotlib.use('Agg')
@@ -23,18 +23,19 @@ class load(object):
 
 
     def __init__(self, imagename, psfname=None, sourcefinder_name='pybdsm',
-                 makeplots=True, do_psf_corr=True, do_local_var=True,
-                 psf_corr_region=5, local_var_region=10, rel_excl_src=None, 
-                 pos_smooth=2, neg_smooth=2, loglevel=0, thresh_pix=5,
-                 thresh_isl=3, neg_thresh_isl=3, neg_thresh_pix=5, reset_rel=None,
-                 prefix=None, do_nearsources=False, savefits=False,
-                 increase_beam_cluster=False, savemask_pos=False, savemask_neg=False,
-                 no_smooth=True, **kw):
+	             saveformat="gaul", makeplots=True, do_psf_corr=True, 
+				 do_local_var=True, psf_corr_region=5, local_var_region=10,
+				 rel_excl_src=None, pos_smooth=2, neg_smooth=2, loglevel=0, 
+				 thresh_pix=5, thresh_isl=3, neg_thresh_isl=3,
+				 neg_thresh_pix=5, reset_rel=None, prefix=None, 
+				 do_nearsources=False, savefits=False, 
+				 increase_beam_cluster=False, savemask_pos=False,
+				 savemask_neg=False, no_smooth=True, **kw):
 
         """ Takes in image and extracts sources and makes 
             reliability estimations..
            
- 
+		
         imagename: Fits image
         psfname: PSF fits image, optional. 
 
@@ -144,7 +145,9 @@ class load(object):
         self.savemaskneg = savemask_neg
         self.savefits = savefits
         self.derel = reset_rel
-
+        self.log.info("Catalogues will be saved as %s, where srl is source "
+					  " and gaul is Gaussians. "%saveformat)
+        self.catalogue_format = "." + saveformat
         if not self.psfname:
             self.log.info(" No psf provided, do_psf_corr is set to False.")
             self.do_psf_corr = False
@@ -221,13 +224,9 @@ class load(object):
             kw["blank_limit"] = self.noise/1.0e5
 
         naxis = self.header["NAXIS1"] 
-
         boundary = numpy.array([self.locstep, self.cfstep])
-
-
         trim_box = (boundary.max(), naxis - boundary.max(),
                   boundary.max(), naxis - boundary.max())
-
 
         # source extraction
         utils.sources_extraction(
@@ -403,8 +402,9 @@ class load(object):
 
         # finding sources 
         self.log.info(" Extracting the sources on both sides ")
-        pfile = self.prefix + ".gaul.fits"
-        nfile = self.prefix + "_negative.gaul.fits"
+
+        pfile = self.prefix + self.catalogue_format + ".fits"
+        nfile = self.prefix + "_negative" + self.catalogue_format + ".fits"
         # i need to catch mmap.mmap error here
 
         # running a source finder

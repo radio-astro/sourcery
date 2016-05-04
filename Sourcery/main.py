@@ -43,6 +43,8 @@ def main():
 
     add("-s", "--source-finder", dest="source_finder", default="pybdsm",
         help=" Source finder name. Default='pybdsm'.")
+    add("-catype", "--catalog-format", dest="catalogue_format", default="gaul",
+        help=" Type of a catalogue. Gaussians are 'gaul', source list is 'srl'")
 
     add("--to-pybdsm", dest="to_pybdsm", action="append",
            help=" PyBDSM process_image options" 
@@ -264,8 +266,9 @@ def main():
                 prefix = prefix + "-%04d"%i
 
             mc  = rel.load(imagename=image, psfname=psf, sourcefinder_name=
-                     args.source_finder, makeplots=args.do_relplots, 
-                     do_psf_corr=args.add_psfcorr, do_local_var=args.add_locvar,
+                     args.source_finder, makeplots=args.do_relplots,
+					 saveformat=args.catalogue_format, do_psf_corr=args.add_psfcorr,
+					 do_local_var=args.add_locvar,
                      psf_corr_region=psfregion, local_var_region=locregion, 
                      rel_excl_src=args.rel_rmsrc, pos_smooth=args.pos_smooth,
                      neg_smooth=args.neg_smooth, loglevel=args.log_level, 
