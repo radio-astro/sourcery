@@ -225,9 +225,9 @@ class load(object):
 
         naxis = self.header["NAXIS1"] 
         boundary = numpy.array([self.locstep, self.cfstep])
-        trim_box = (boundary.max(), naxis - boundary.max(),
-                  boundary.max(), naxis - boundary.max())
-
+        #trim_box = (boundary.max(), naxis - boundary.max(),
+        #          boundary.max(), naxis - boundary.max())
+        trim_box = None
         # source extraction
         utils.sources_extraction(
              image=image, output=output, 
