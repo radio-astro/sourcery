@@ -44,11 +44,10 @@ def main():
     add("-s", "--source-finder", dest="source_finder", default="pybdsm",
         help=" Source finder name. Default='pybdsm'.")
     add("-catype", "--catalog-format", dest="catalogue_format", default="gaul",
-        help=" Type of a catalogue. Gaussians are 'gaul', source list is 'srl'")
+        help=" Type of a catalogue. Gaussian cataog is 'gaul', source list is 'srl'")
 
     add("--to-pybdsm", dest="to_pybdsm", action="append",
-           help=" PyBDSM process_image options" 
-           " [may be specified multiple times]. E.g thresh_pix=1 etc.")
+           help=" PyBDSM process_image option. E.g 'thresh_pix=1,thresh_pix=2'")
 
     add("-log", "--log-level",dest="log_level", type=int, default=0,
         help=" Python logging module, where info=0, debug=1, critial=2 and abort=3.")
@@ -148,9 +147,17 @@ def main():
 
 
     args = parser.parse_args() 
-    pybdsm_opts = dict([ items.split("=") for items in args.to_pybdsm ] ) \
-                       if args.to_pybdsm else {}
-
+    to_pybdsm = args.to_pybdsm[0].split(",") if args.to_pybdsm else None
+    pybdsm_opts = dict([ items.split("=") for items in to_pybdsm ] ) \
+                       if to_pybdsm else {}
+    
+    for key, val in pybdsm_opts.iteritems():
+        if not callable(val):
+            try:
+                pybdsm_opts[key] = eval(key)
+            except NameError:
+                pybdsm_opts[key] = val
+	    
     if not args.image:
         print("ATTENTION: No image provided. Unless specified inside JSON file otherwise"
               " the execution is aborted")

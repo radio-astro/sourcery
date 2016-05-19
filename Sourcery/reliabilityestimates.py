@@ -196,6 +196,7 @@ class load(object):
         
         self.opts_pos.update(kw)
         self.opts_neg = {}
+        self.opts_neg.update(kw)
         self.neg_thresh_isl = neg_thresh_isl
         self.neg_thresh_pix = neg_thresh_pix
         self.opts_neg["thresh_isl"] = self.neg_thresh_isl
