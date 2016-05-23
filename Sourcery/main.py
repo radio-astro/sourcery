@@ -13,7 +13,7 @@ import utils
 
 
 
-# set simms directory
+# set sourcery directory
 _path = os.path.realpath(__file__)
 _path = os.path.dirname(_path)
 execfile("%s/__init__.py"%_path)
@@ -231,6 +231,9 @@ def main():
                 if enable:
                     dc = dd.load( psfname=psf, **ddict)
                     pmodel, nmodel  = dc.source_selection()
+                pmodel.save( prefix+".lsm.html")
+                nmodel.save( prefix+"_negative.lsm.html")
+                utils.xrun("tigger-convert", ["--rename -f", prefix + ".lsm.html"])
 
         else:
 
