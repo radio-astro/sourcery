@@ -222,6 +222,7 @@ def main():
                 mc = rel.load(image, psf, **reldict)
                 pmodel, nmodel, step = mc.get_reliability()
 
+                reldict["prefix"] = prefix
                 ddict["pmodel"] = pmodel
                 ddict["nmodel"] = nmodel
                 ddict["prefix"] = prefix
@@ -243,7 +244,7 @@ def main():
             reldict["prefix"]  = prefix 
             mc = rel.load(image, psf, **reldict)
             pmodel, nmodel, step = mc.get_reliability()
-
+            
             ddict["pmodel"] = pmodel
             ddict["nmodel"] = nmodel
             ddict["prefix"] = prefix
