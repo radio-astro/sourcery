@@ -37,6 +37,9 @@ def main():
     add("-p", "--psfimage", dest="psf", default=None,
         help="Point Spread Function (PSF) Fits image name. Default = None")
 
+    add("-ds", "--disable-smoothing", dest="no_smooth", action="store_true",
+        help="Disable smoothing")
+
     add("-s", "--source-finder", dest="source_finder", default="pybdsm",
         help="Source finder name. Default='pybdsm'")
 
@@ -276,7 +279,8 @@ def main():
                      args.neg_thresh_pix, prefix=prefix, reset_rel=args.reset_rel, 
                      do_nearsources=args.do_nearsources, increase_beam_cluster=
                      args.do_beam, savemask_neg=args.savemask_neg,
-                     savemask_pos=args.savemask_pos, **pybdsm_opts)
+                     savemask_pos=args.savemask_pos,no_smooth=args.no_smooth,
+                     **pybdsm_opts)
 
             # assignign reliability values
             pmodel, nmodel, data, hdr, step = mc.get_reliability()

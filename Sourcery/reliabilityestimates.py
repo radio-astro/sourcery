@@ -28,7 +28,7 @@ class load(object):
                  thresh_isl=3, neg_thresh_isl=3, neg_thresh_pix=5, reset_rel=None,
                  prefix=None, do_nearsources=False, savefits=False,
                  increase_beam_cluster=False, savemask_pos=False, savemask_neg=False,
-                 **kw):
+                 no_smooth=False,**kw):
 
         """ Takes in image and extracts sources and makes 
             reliability estimations..
@@ -111,8 +111,9 @@ class load(object):
          kw : kward for source extractions. Should be a mapping e.g
             kw['thresh_isl'] = 2.0 or kw['do_polarization'] = True 
         """
-
-
+        
+        no_smooth = kw.pop("no_smooth", no_smooth)
+        self.smoothing = not no_smooth
        
         self.prefix = prefix
 
@@ -211,34 +212,37 @@ class load(object):
     def source_finder(self, image=None, imagedata=None, thresh=None, prefix=None,
                       noise=None, output=None, savemask=None, **kw):
         
-        ext = utils.fits_ext(image)
-        tpos = tempfile.NamedTemporaryFile(suffix="."+ext, dir=".")
-        tpos.flush()
-        kwards = {}
-        #kw.update(kwards)
+        tpos = None
+        if self.smoothing:
 
-        # data smoothing
-        mask, noise = utils.thresh_mask(image, 
-                          imagedata, tpos.name, hdr=self.header,
-                          thresh=thresh, noise=self.noise, 
-                          sigma=True, smooth=True, prefix=prefix, 
-                          savemask=savemask)
+            ext = utils.fits_ext(image)
+            tpos = tempfile.NamedTemporaryFile(suffix="."+ext, dir=".")
+            tpos.flush()
+
+            # data smoothing
+            mask, noise = utils.thresh_mask(image, 
+                              imagedata, tpos.name, hdr=self.header,
+                              thresh=thresh, noise=self.noise, 
+                              sigma=True, smooth=True, prefix=prefix, 
+                              savemask=savemask)
+
+            # using the masked image for forming islands
+            kw["detection_image"] = tpos.name
+            kw["blank_limit"] = blank_limit=self.noise/1.0e5
+
         naxis = self.header["NAXIS1"] 
         boundary = numpy.array([self.locstep, self.cfstep])
         trim_box = (boundary.max(), naxis - boundary.max(),
-                  boundary.max(), naxis - boundary.max())
-
-        # using the masked image for forming islands
-        kwards["detection_image"] = tpos.name
-        kw.update(kwards)
-
+                    boundary.max(), naxis - boundary.max())
         # source extraction
         utils.sources_extraction(
              image=image, output=output, 
              sourcefinder_name=self.sourcefinder_name,
-             blank_limit=self.noise/1.0e5, trim_box=trim_box,
+             trim_box=trim_box,
              prefix=self.prefix, **kw)
-        tpos.close()
+
+        if tpos:
+            tpos.close()
 
 
     def remove_sources_within(self, model):
