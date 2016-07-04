@@ -1,7 +1,7 @@
 # Reliability estimation script
 # Lerato Sebokolodi <mll.sebokolodi@gmail.com>
 
-
+		
 
 import matplotlib
 matplotlib.use('Agg')
@@ -16,24 +16,26 @@ from Tigger.Models import SkyModel, ModelClasses
 import pyfits
 from Tigger.Coordinates import angular_dist_pos_angle as dist
 import sys
+from astLib.astWCS import WCS
 
 
 class load(object):
 
 
     def __init__(self, imagename, psfname=None, sourcefinder_name='pybdsm',
-                 makeplots=True, do_psf_corr=True, do_local_var=True,
-                 psf_corr_region=5, local_var_region=10, rel_excl_src=None, 
-                 pos_smooth=2, neg_smooth=2, loglevel=0, thresh_pix=5,
-                 thresh_isl=3, neg_thresh_isl=3, neg_thresh_pix=5, reset_rel=None,
-                 prefix=None, do_nearsources=False, savefits=False,
-                 increase_beam_cluster=False, savemask_pos=False, savemask_neg=False,
-                 **kw):
+	             saveformat="gaul", makeplots=True, do_psf_corr=True, 
+				 do_local_var=True, psf_corr_region=5, local_var_region=10,
+				 rel_excl_src=None, pos_smooth=2, neg_smooth=2, loglevel=0, 
+				 thresh_pix=5, thresh_isl=3, neg_thresh_isl=3,
+				 neg_thresh_pix=5, reset_rel=None, prefix=None, 
+				 do_nearsources=False, savefits=False, 
+				 increase_beam_cluster=False, savemask_pos=False,
+				 savemask_neg=False, no_smooth=True, **kw):
 
         """ Takes in image and extracts sources and makes 
             reliability estimations..
            
- 
+		
         imagename: Fits image
         psfname: PSF fits image, optional. 
 
@@ -113,6 +115,8 @@ class load(object):
         """
 
 
+        #
+        self.smoothing = not no_smooth
        
         self.prefix = prefix
 
@@ -124,15 +128,12 @@ class load(object):
         # image, psf image
         self.imagename = imagename
         self.psfname = psfname 
+
+        with pyfits.open(imagename) as hdu:
+            self.header = hdu[0].header
+            self.wcs = WCS(self.header, mode="pyfits")
+            self.pixelsize = abs(self.header["cdelt1"])
       
-        # reading imagename data
-        imagedata, self.wcs, self.header, self.pixelsize =\
-            utils.reshape_data(self.imagename, prefix=self.prefix)
-
-        self.imagedata = numpy.array(imagedata, dtype=numpy.float32)
-        self.image2by2 = numpy.array(utils.image_data(imagedata, prefix),
-                             dtype=numpy.float32)
-
         self.bmaj = numpy.deg2rad(self.header["BMAJ"])
 
         # boolean optionals    
@@ -144,17 +145,16 @@ class load(object):
         self.savemaskneg = savemask_neg
         self.savefits = savefits
         self.derel = reset_rel
-
+        self.log.info("Catalogues will be saved as %s, where srl is source "
+					  " and gaul is Gaussians. "%saveformat)
+        self.catalogue_format = "." + saveformat
         if not self.psfname:
             self.log.info(" No psf provided, do_psf_corr is set to False.")
             self.do_psf_corr = False
 
-        if self.psfname:
-            psfdata, self.psfhdr = utils.open_psf_image(self.psfname)
-            self.psfdata = utils.image_data(psfdata, prefix)
  
         # computing negative noise
-        self.noise, self.mean = utils.negative_noise(self.imagedata, self.prefix) #here is 2X2 data here
+        self.noise, self.mean = utils.negative_noise(self.imagename, self.prefix)
         
         self.log.info(" The negative noise is %e Jy/beam"%self.noise)
         if self.noise == 0: 
@@ -166,13 +166,7 @@ class load(object):
                       self.sourcefinder_name)
 
         self.negimage = self.prefix + "_negative.fits"
-        
-        negativedata =  utils.invert_image(
-                               self.imagename, self.imagedata,
-                               self.header, self.negimage, prefix)
-        self.negimage2by2 = numpy.array(utils.image_data(negativedata, prefix),
-                             dtype=numpy.float32)
-        self.negativedata = numpy.array(negativedata, numpy.float32)
+        utils.invert_image(self.imagename, self.negimage)  
        
         # smoothing factors
         self.pos_smooth = pos_smooth
@@ -202,43 +196,48 @@ class load(object):
         
         self.opts_pos.update(kw)
         self.opts_neg = {}
+        self.opts_neg.update(kw)
         self.neg_thresh_isl = neg_thresh_isl
         self.neg_thresh_pix = neg_thresh_pix
         self.opts_neg["thresh_isl"] = self.neg_thresh_isl
         self.opts_neg["thresh_pix"] = self.neg_thresh_pix
  
      
-    def source_finder(self, image=None, imagedata=None, thresh=None, prefix=None,
+    def source_finder(self, image=None, thresh=None, prefix=None,
                       noise=None, output=None, savemask=None, **kw):
         
-        ext = utils.fits_ext(image)
-        tpos = tempfile.NamedTemporaryFile(suffix="."+ext, dir=".")
-        tpos.flush()
-        kwards = {}
         #kw.update(kwards)
-
+        tpos = None
+        naxis = self.header["NAXIS1"] 
+        boundary = numpy.array([self.locstep, self.cfstep])
+        #trim_box = (boundary.max(), naxis - boundary.max(),
+        #          boundary.max(), naxis - boundary.max())
+        trim_box = None
         # data smoothing
-        mask, noise = utils.thresh_mask(image, 
-                          imagedata, tpos.name, hdr=self.header,
+        if self.smoothing:
+
+            ext = utils.fits_ext(image)
+            tpos = tempfile.NamedTemporaryFile(suffix="."+ext, dir=".")
+            tpos.flush()
+
+            mask, noise = utils.thresh_mask(image, tpos.name,
                           thresh=thresh, noise=self.noise, 
                           sigma=True, smooth=True, prefix=prefix, 
                           savemask=savemask)
-        naxis = self.header["NAXIS1"] 
-        boundary = numpy.array([self.locstep, self.cfstep])
-        trim_box = (boundary.max(), naxis - boundary.max(),
-                  boundary.max(), naxis - boundary.max())
 
-        # using the masked image for forming islands
-        kwards["detection_image"] = tpos.name
-        kw.update(kwards)
+            # using the masked image for forming islands
+            kw["detection_image"] = tpos.name
+            kw["blank_limit"] = self.noise/1.0e5
 
         # source extraction
         utils.sources_extraction(
              image=image, output=output, 
              sourcefinder_name=self.sourcefinder_name,
-             blank_limit=self.noise/1.0e5, trim_box=trim_box,
+             trim_box=trim_box,
              prefix=self.prefix, **kw)
-        tpos.close()
+
+        if tpos:
+            tpos.close()
 
 
     def remove_sources_within(self, model):
@@ -257,10 +256,12 @@ class load(object):
         return model
     
 
-    def params(self, modelfits, data_image):
+    def params(self, modelfits):
      
         # reads in source finder output             
-        data = pyfits.open(modelfits)[1].data
+        with pyfits.open(modelfits) as hdu:
+            data = hdu[1].data
+
         tfile = tempfile.NamedTemporaryFile(suffix=".txt")
         tfile.flush() 
 
@@ -302,25 +303,30 @@ class load(object):
             # only accepts sources with flux > 0 and not nan RA and DEC
             # and local variance
             pos = [self.wcs.wcs2pix(*(ra, dec))][0] #positions from deg to pixel
+
+            with pyfits.open(self.negimage) as hdu:
+                negdata = utils.image_data( hdu[0].data )
+
             if flux > 0 and peak_flux > 0 and not math.isnan(float(ra))\
                 and not math.isnan(float(dec)):
 
-                  local = utils.compute_local_variance(self.negimage2by2,
+                  local = utils.compute_local_variance(negdata,
                             pos, self.locstep)
-                  srs.setAttribute("l", local)
+
+                  srs.setAttribute("local_variance", local)
+
+                  
                   if not math.isnan(float(local)) or local  > 0:
                       if self.psfname:
-                          pdata, psf = utils.compute_psf_correlation(data_image,
-                                         self.psfdata, self.psfhdr, pos, self.cfstep)
+                          pdata, psf = utils.compute_psf_correlation(self.imagename,
+                                         self.psfname, pos, self.cfstep)
 
                           if len(pdata) == len(psf):
                               c_region = numpy.corrcoef((pdata, psf))
                               cf =  (numpy.diag((numpy.rot90(c_region))**2)
                                            .sum())**0.5/2**0.5
-                              srs.setAttribute("cf", cf)
-                              #srs.setAttribute("ex", emaj)
-                              #srs.setAttribute("ey", emin)
-                              #srs.setAttribute("I_err", data["E_Total_flux"][i])
+
+                              srs.setAttribute("correlation_factor", cf)
                               corr.append(cf)
                               model.sources.append(srs) 
                               peak.append(peak_flux)
@@ -329,9 +335,6 @@ class load(object):
                               loc.append(local)
                       else:
                           model.sources.append(srs) 
-                          #srs.setAttribute("ex", emaj)
-                          #srs.setAttribute("ey", emin)
-                          #srs.setAttribute("I_err", data["E_Total_flux"][i])
                           peak.append(peak_flux)
                           total.append(flux)
                           area.append(srcarea)
@@ -340,6 +343,7 @@ class load(object):
         labels = dict(size=(0, "Log$_{10}$(Source area)"), 
                       peak=(1, "Log$_{10}$( Peak flux [Jy] )"), 
                       tot=(2, "Log$_{10}$( Total flux [Jy] )"))
+
         if self.do_psf_corr:
             labels.update( {"coeff":(len(labels),
                             "Log$_{10}$ (CF)")})
@@ -360,7 +364,7 @@ class load(object):
             near = model.getSourcesNear(ra, dec, 5 * self.bmaj)
             nonear = len(near) 
             if self.nearsources:
-                src.setAttribute("n", nonear)
+                src.setAttribute("neibours", nonear)
 
             if self.do_psf_corr and self.do_local_var and self.nearsources:
                  out[i,...] =  area[i], peak[i], total[i], corr[i], loc[i], nonear
@@ -399,29 +403,28 @@ class load(object):
 
         # finding sources 
         self.log.info(" Extracting the sources on both sides ")
-        pfile = self.prefix + ".gaul.fits"
-        nfile = self.prefix + "_negative.gaul.fits"
-         
+
+        pfile = self.prefix + self.catalogue_format + ".fits"
+        nfile = self.prefix + "_negative" + self.catalogue_format + ".fits"
         # i need to catch mmap.mmap error here
 
         # running a source finder
-        self.source_finder(image=self.negimage, imagedata=self.negativedata,
+        self.source_finder(image=self.negimage,
                            output=nfile, thresh=self.neg_smooth,
                            savemask=self.savemaskneg,
                            prefix=self.prefix, **self.opts_neg)
-        self.source_finder(image=self.imagename, imagedata=self.imagedata,
+
+        self.source_finder(image=self.imagename,
                            output=pfile, thresh=self.pos_smooth, 
                            savemask=self.savemaskpos,
                            prefix=self.prefix, **self.opts_pos)
 
         self.log.info(" Source Finder completed successfully ")
-        if not self.savefits:
-            self.log.info(" Deleting the negative image.")
-            os.system("rm -r %s"%self.negimage)
+
 
          
-        pmodel, positive, labels = self.params(pfile, self.image2by2)
-        nmodel, negative, labels = self.params(nfile, self.negimage2by2)
+        pmodel, positive, labels = self.params(pfile)
+        nmodel, negative, labels = self.params(nfile)
      
         # setting up a kernel, Gaussian kernel
         bandwidth = []
@@ -465,8 +468,8 @@ class load(object):
         # the values are currently arbitrary
         if self.do_psf_corr and self.derel:
             for s in pmodel.sources:
-                cf, r = s.cf, s.rel
-                if cf < 0.002 and r > 0.60:
+                cf, r = s.correlation_factor, s.rel
+                if cf < 0.006 and r > 0.60:
                     s.rel = 0.0    
 
         if self.makeplots:
@@ -480,5 +483,13 @@ class load(object):
                           " from the phase center" %self.radiusrm)
             pmodel = self.remove_sources_within(pmodel)
 
-        return  pmodel, nmodel, self.noise, self.header
+
+        if not self.savefits:
+            self.log.info(" Deleting the negative image.")
+            os.system("rm -r %s"%self.negimage)
+
+        # Set field Center
+        pmodel.ra0, pmodel.dec0 = map(numpy.deg2rad, self.wcs.getCentreWCSCoords())
+
+        return  pmodel, nmodel, self.locstep
 

@@ -1,9 +1,8 @@
-##Current version: 0.2.9
+##Current version: 0.3.0
 
 
-##From version 0.2.8 to 0.2.9, the changes made were;
+##From version 0.2.9 to 0.3.0, the changes made were;
 
-#### Shapes are corrected: sourcery able to assign pnt and Gau appropriately, and uses DC_Maj/Min as a model and Maj/Min for reliability computation.
-#### The flux estimations are corrected. Uses masked image to create islands and the actual image for detection (model fitting)
-#### Takes the radius of sources to exclude inside the reliability script (previously it was done inside main-- had problems)
-#### Has an option to remove sources with correlation < 0.002 and reliability > 0.60
+#### Uses the local noise to estimate the SNR for the sources.
+#### No longer uses the local variance as a parameter to identify sources that require DD calibration
+#### Removes sources with R < 0.99 from the above classification

@@ -98,26 +98,23 @@ def reshape_data (image, prefix=None):
 
 
 def image_data(data, prefix=None):
+    """ returns first image slice of data """
 
-    log = logger(level=0, prefix=prefix) 
-    ndim = len(data.shape)
+    log = logger(level=0, prefix=prefix)
+    imslice = numpy.zeros(data.ndim, dtype=int).tolist()
+    imslice[-1] = slice(None)
+    imslice[-2] = slice(None)
 
-    if ndim == 4:
-        return data[0,0,...]
-
-    elif ndim == 3:
-        return  data[0,...]
-
-    elif ndim == 2:
-        return  data[...]
-    else:
-        log.error(" FITS file has more than 4 axes. Aborting")
-
+    return data[imslice]
+    
 
 # computes the negative noise.
 def negative_noise(data, prefix=None):
 
     """ Computes the image noise using the negative pixels """
+    if isinstance(data, str):
+        with pyfits.open(data) as hdu:
+            data = hdu[0].data
 
     data = image_data(data, prefix)
     negative = data[data<0].flatten()
@@ -127,14 +124,15 @@ def negative_noise(data, prefix=None):
 
 
 # inverts the image
-def invert_image(imagename, data, header, output, prefix=None):
+def invert_image(imagename, output, prefix=None):
 
     log = logger(level=0, prefix=prefix)
     log.info(" We are now creating an inverted image and saving it to %s"%output)
-    newdata = -data
-    pyfits.writeto(output, newdata, header, clobber=True)
-    return newdata
 
+    with pyfits.open(imagename) as hdu:
+        data = -hdu[0].data
+        hdu[0].data = data
+        hdu.writeto(output, clobber=True)
 
 #----------------------------------------------------
 #knicked from Sofia reliability estimator
@@ -157,18 +155,19 @@ def fits_ext(fitsname):
 
 
 # Does the smoothing
-def thresh_mask(imagename, imagedata, output, hdr, thresh, 
+def thresh_mask(imagename, output, thresh, 
                 noise=None, sigma=False, smooth=None,
                 prefix=None, savemask=False):
     """ Create a threshhold mask """
 
-    #hdu = pyfits.open(imagename)
-    #hdr = hdu[0].header
-    
+
+    hdu = pyfits.open(imagename)
+
+    hdr = hdu[0].header
     ndim = hdr["NAXIS"] 
-    imslice = [0] * ndim
-    imslice[-2:] = [slice(None)] * 2
-    data = imagedata[imslice]
+    data = hdu[0].data
+    nn = ndim - 2 # get number of non-image axes
+    kernel = numpy.ones(ndim, dtype=int).tolist()
     
     log = logger(level=0, prefix=prefix)
     # If smooth is not specified, use a fraction of the beam
@@ -191,26 +190,35 @@ def thresh_mask(imagename, imagedata, output, hdr, thresh,
         scales = [0.1, 2.0, 5.0, 10.0, 20.0, 40.0]#, 60.0]
         smooth = None
         for scale in scales: 
+
+            # Updating kernel
             kk = scale * beam
+            kernel[-1] = kk
+            kernel[-2] = kk
+
             smooth = filters.gaussian_filter(
                        data if smooth is None else 
-                       smooth, [kk,kk])
+                       smooth, kernel)
+
             mask *= smooth < thresh
     else:
         log.info(" No smoothing was made since the smooth was set to None")
         mask = data < thresh
     
-    imagedata *= (mask==False)
-    pyfits.writeto(output, imagedata, hdr, clobber=True)
+    hdu[0].data *= (mask==False)
+
+    hdu.writeto(output, clobber=True)
 
     if savemask:
         log.info(" Saving Masked images.")
         mask = (mask== False) * 1 
         ext = fits_ext(imagename)
         outmask = prefix + "-mask.fits" or  imagename.replace(ext,"-mask.fits")
-        pyfits.writeto(outmask, mask, hdr, clobber=True)
+        
+        hdu[0].data = mask 
+
+        hdu.writeto(outmask, clobber=True)
         log.info(" Masking an image %s was succesfull"%imagename)
-        #return mask, noise
 
     return mask==False, noise
 
@@ -226,21 +234,22 @@ def sources_extraction(image, output=None,
        results into a Tigger model and writes it to output.
 
     image :  Fits image data
-    output : Tigger format, default image name.lsm.html
+    ou
         A Catalog name to store the extracted sources
     """
     # start with default PYBDSM options
     opts = {}
     opts.update(kw)
 
-    
+    catalogue_format = output.split(".")[-2]
     log = logger(level=0, prefix=prefix)     
     log.info(" Source finding begins...")
     if sourcefinder_name.lower() == "pybdsm":
         from lofar import bdsm
-        img = bdsm.process_image(image, group_by_isl=True, **kw)
+        img = bdsm.process_image(image, group_by_isl=True, **kw) 
         img.write_catalog(outfile=output, format="fits", 
-                          catalog_type="gaul", clobber=True)
+                          catalog_type=catalogue_format, clobber=True)
+
     log.info(" Source finding was succesfully performed.")
     return output
 
@@ -267,6 +276,7 @@ def plot_local_variance(modellsm, noise, prefix, threshold):
     pylab.plot([noise/1.0e-6] * len(local))
     x = numpy.arange(len(local))
     pylab.plot(x, local)
+
     for i, src in enumerate(model.sources):
         if local[i] > threshold * noise:
             pylab.plot(x[i], local[i], "rD")
@@ -276,15 +286,9 @@ def plot_local_variance(modellsm, noise, prefix, threshold):
     pylab.savefig(savefig)
 
 
-# opens the psf image
-def open_psf_image(psfimage):
-    psf = pyfits.open(psfimage)
-    psfdata, psfhdr = psf[0].data, psf[0].header
-    return psfdata, psfhdr
-    
 
 #computes the correlation factor
-def compute_psf_correlation(imagedata, psfdata, psfhdr, pos,
+def compute_psf_correlation(image, psf, pos,
                             step=None):
 
     """Computes PSF correlation.
@@ -294,7 +298,14 @@ def compute_psf_correlation(imagedata, psfdata, psfhdr, pos,
     imagedata:  Takes image data already in 2 * 2.
     
     """   
+
+    with pyfits.open(image) as hdu:
+        imagedata = image_data(hdu[0].data)
     
+    with pyfits.open(psf) as hdu:
+        psfdata = image_data(hdu[0].data)
+        psfhdr = hdu[0].header
+
     c0 = psfhdr["CRPIX2"] 
     psf_region  = psfdata[c0-step: c0+step, c0-step : c0+step].flatten()
 
@@ -379,4 +390,37 @@ def plot(pos, neg, rel=None, labels=None, show=False, savefig=None,
         pylab.ylabel(labels[y][1], fontsize="35")
         pylab.grid()
     pylab.savefig(savefig)
+
+
+def xrun(command, options, log=None):
+    """
+        Run something on command line.
+        Example: _run("ls", ["-lrt", "../"])
+    """
+
+    options = map(str, options)
+
+    cmd = " ".join([command]+options)
+
+    if log:
+        log.info("Running: %s"%cmd)
+    else:
+        print('running: %s'%cmd)
+
+    process = subprocess.Popen(cmd,
+                  stderr=subprocess.PIPE if not isinstance(sys.stderr,file) else sys.stderr,
+                  stdout=subprocess.PIPE if not isinstance(sys.stdout,file) else sys.stdout,
+                  shell=True)
+
+    if process.stdout or process.stderr:
+
+        out, err = process.comunicate()
+        sys.stdout.write(out)
+        sys.stderr.write(err)
+        return out
+    else:
+        process.wait()
+    if process.returncode:
+         raise SystemError('%s: returns errr code %d'%(command, process.returncode))
+
      
