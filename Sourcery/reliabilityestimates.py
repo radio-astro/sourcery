@@ -208,6 +208,11 @@ class load(object):
         
         #kw.update(kwards)
         tpos = None
+        naxis = self.header["NAXIS1"] 
+        boundary = numpy.array([self.locstep, self.cfstep])
+        #trim_box = (boundary.max(), naxis - boundary.max(),
+        #          boundary.max(), naxis - boundary.max())
+        trim_box = None
         # data smoothing
         if self.smoothing:
 
@@ -216,7 +221,7 @@ class load(object):
             tpos.flush()
 
             mask, noise = utils.thresh_mask(image, tpos.name,
-                         thresh=thresh, noise=self.noise, 
+                          thresh=thresh, noise=self.noise, 
                           sigma=True, smooth=True, prefix=prefix, 
                           savemask=savemask)
 
@@ -224,11 +229,6 @@ class load(object):
             kw["detection_image"] = tpos.name
             kw["blank_limit"] = self.noise/1.0e5
 
-        naxis = self.header["NAXIS1"] 
-        boundary = numpy.array([self.locstep, self.cfstep])
-        #trim_box = (boundary.max(), naxis - boundary.max(),
-        #          boundary.max(), naxis - boundary.max())
-        trim_box = None
         # source extraction
         utils.sources_extraction(
              image=image, output=output, 
