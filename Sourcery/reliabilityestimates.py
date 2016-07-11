@@ -430,8 +430,11 @@ class load(object):
         bandwidth = []
 
         for plane in negative.T:
-            bandwidth.append(plane.std())
-
+            # just editing this to see if it might change anything
+            Q3, Q2 = numpy.percentile(plane, [75, 25])
+            IQR = Q3 - Q2
+            bandwidth.append(min([plane.std(), IQR/1.34]))
+            #bandwidth.append(plane.std())
         nplanes = len(labels)
         cov = numpy.zeros([nplanes, nplanes])
         nnsrc = len(negative)
