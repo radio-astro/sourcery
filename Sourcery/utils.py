@@ -160,7 +160,7 @@ def thresh_mask(imagename, output, thresh,
                 prefix=None, savemask=False):
     """ Create a threshhold mask """
 
-
+    
     hdu = pyfits.open(imagename)
 
     hdr = hdu[0].header
@@ -180,14 +180,14 @@ def thresh_mask(imagename, output, thresh,
     thresh = thresh * noise
     
     mask = numpy.ones(data.shape)
-
+    masked = 0
     if smooth:
         log.info(" A masking threshold was set to %.2f"%(thresh/noise))
         emin = hdr["BMIN"]
         emaj = hdr["BMAJ"]
         cell = abs(hdr["CDELT1"])
-        beam = math.sqrt(emin*emaj)/cell
-        scales = [0.1, 2.0, 5.0, 10.0, 20.0, 40.0]#, 60.0]
+        beam = math.sqrt(emin * emaj)/cell
+        scales = [0.1, 0.3, 0.5, 1.0, 1.5, 1.9, 2.0, 5.0, 10.0]#, 60.0]
         smooth = None
         for scale in scales: 
 
@@ -195,32 +195,33 @@ def thresh_mask(imagename, output, thresh,
             kk = scale * beam
             kernel[-1] = kk
             kernel[-2] = kk
-
             smooth = filters.gaussian_filter(
                        data if smooth is None else 
                        smooth, kernel)
-
-            mask *= smooth < thresh
+            mask *=  smooth > thresh
+            masked += mask
+        masked[masked > 1] = 1
+        masked = masked * data
     else:
         log.info(" No smoothing was made since the smooth was set to None")
-        mask = data < thresh
+        mask = data > thresh
+        masked = mask * data
     
-    hdu[0].data *= (mask==False)
+    hdu[0].data = masked #*= (mask==False)
 
     hdu.writeto(output, clobber=True)
+    #hdu.writeto("masked.fits", clobber=True)
+    #if savemask:
+    #    log.info(" Saving Masked images.")
+    #    mask = (mask == True) * 1 
+    #    ext = fits_ext(imagename)
+    #    outmask = prefix + "-mask.fits" or  imagename.replace(ext,"-mask.fits")
+    #    hdu[0].data = mask
 
-    if savemask:
-        log.info(" Saving Masked images.")
-        mask = (mask== False) * 1 
-        ext = fits_ext(imagename)
-        outmask = prefix + "-mask.fits" or  imagename.replace(ext,"-mask.fits")
-        
-        hdu[0].data = mask 
+    #    hdu.writeto(outmask, clobber=True)
+    #    log.info(" Masking an image %s was succesfull"%imagename)
 
-        hdu.writeto(outmask, clobber=True)
-        log.info(" Masking an image %s was succesfull"%imagename)
-
-    return mask==False, noise
+    return masked, noise
 
 
 

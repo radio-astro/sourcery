@@ -17,6 +17,7 @@ import pyfits
 from Tigger.Coordinates import angular_dist_pos_angle as dist
 import sys
 from astLib.astWCS import WCS
+import smooth_mask
 
 
 class load(object):
@@ -210,9 +211,7 @@ class load(object):
         tpos = None
         naxis = self.header["NAXIS1"] 
         boundary = numpy.array([self.locstep, self.cfstep])
-        #trim_box = (boundary.max(), naxis - boundary.max(),
-        #          boundary.max(), naxis - boundary.max())
-        trim_box = None
+
         # data smoothing
         if self.smoothing:
 
@@ -233,7 +232,6 @@ class load(object):
         utils.sources_extraction(
              image=image, output=output, 
              sourcefinder_name=self.sourcefinder_name,
-             trim_box=trim_box,
              prefix=self.prefix, **kw)
 
         if tpos:
@@ -258,9 +256,6 @@ class load(object):
 
     def params(self, modelfits):
      
-        # reads in source finder output             
-        with pyfits.open(modelfits) as hdu:
-            data = hdu[1].data
 
         tfile = tempfile.NamedTemporaryFile(suffix=".txt")
         tfile.flush() 
@@ -269,9 +264,17 @@ class load(object):
         with open(tfile.name, "w") as std:
             std.write("#format:name ra_rad dec_rad i emaj_r emin_r pa_r\n")
 
-        model = Tigger.load(tfile.name) # open a tmp. file
-    
+        model = Tigger.load(tfile.name) # open a tmp. file    
         peak, total, area, loc, corr = [], [], [], [], []
+
+        # reads in source finder output    
+        try:         
+            with pyfits.open(modelfits) as hdu:
+                data = hdu[1].data
+        except:
+             self.log.info("No Sources were found on %s therefore no reliability"
+                               " estimations can be made."%self.imagename) 
+             
         for i in range(len(data)):
             flux = data["Total_flux"][i] 
             dc_emaj, dc_emin = data["DC_Maj"][i], data["DC_Min"][i]
@@ -425,12 +428,13 @@ class load(object):
          
         pmodel, positive, labels = self.params(pfile)
         nmodel, negative, labels = self.params(nfile)
-     
+        
         # setting up a kernel, Gaussian kernel
         bandwidth = []
 
         for plane in negative.T:
-            # just editing this to see if it might change anything
+            # just editing this to see if it might change anything, this method of
+            # computing sigma to avoid outliers.
             Q3, Q2 = numpy.percentile(plane, [75, 25])
             IQR = Q3 - Q2
             bandwidth.append(min([plane.std(), IQR/1.34]))
@@ -472,7 +476,7 @@ class load(object):
         if self.do_psf_corr and self.derel:
             for s in pmodel.sources:
                 cf, r = s.correlation_factor, s.rel
-                if cf < 0.006 and r > 0.60:
+                if cf < 0.09999:
                     s.rel = 0.0    
 
         if self.makeplots:

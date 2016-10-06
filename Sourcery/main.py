@@ -157,11 +157,7 @@ def main():
                 pybdsm_opts[key] = eval(key)
             except NameError:
                 pybdsm_opts[key] = val
-	    
-    if not args.image:
-        print("ATTENTION: No image provided. Unless specified inside JSON file otherwise"
-              " the execution is aborted")
-        
+	      
 
     # making outdirectory
     def get_prefix(prefix, imagename, outdir):
@@ -182,7 +178,7 @@ def main():
         images = args.image.split(",") if args.image else None
         with open(args.config) as conf:
             jdict = json.load(conf)
-            for key,val in jdict.items():
+            for key, val in jdict.items():
                 if isinstance(val, unicode):
                     jdict[key] = str(val)
         
@@ -193,7 +189,7 @@ def main():
         reldict = jdict["reliability"]
         ddict = jdict["dd_tagging"]
         sourcefin = jdict["source_finder_opts"]
-
+        
         for key, val in reldict.iteritems():
             if isinstance(val, unicode):
                 reldict[key] = str(val)
@@ -220,22 +216,25 @@ def main():
 
                 reldict["prefix"]  = prefix
                 mc = rel.load(image, psf, **reldict)
-                pmodel, nmodel, step = mc.get_reliability()
+                try:
+                    pmodel, nmodel, step = mc.get_reliability()
 
-                reldict["prefix"] = prefix
-                ddict["pmodel"] = pmodel
-                ddict["nmodel"] = nmodel
-                ddict["prefix"] = prefix
-                ddict["imagename"] = image
-                ddict["local_step"] = step
+                    reldict["prefix"] = prefix
+                    ddict["pmodel"] = pmodel
+                    ddict["nmodel"] = nmodel
+                    ddict["prefix"] = prefix
+                    ddict["imagename"] = image
+                    ddict["local_step"] = step
 
-                if enable:
-                    dc = dd.load( psfname=psf, **ddict)
-                    pmodel, nmodel  = dc.source_selection()
-                pmodel.save( prefix+".lsm.html")
-                nmodel.save( prefix+"_negative.lsm.html")
-                utils.xrun("tigger-convert", ["--rename -f", prefix + ".lsm.html"])
-
+                    if enable:
+                        dc = dd.load( psfname=psf, **ddict)
+                        pmodel, nmodel  = dc.source_selection()
+                    pmodel.save( prefix+".lsm.html")
+                    nmodel.save( prefix+"_negative.lsm.html")
+                    utils.xrun("tigger-convert", ["--rename -f", prefix + ".lsm.html"])
+                except:
+                    pass
+        
         else:
 
             image = jdict["imagename"]
@@ -256,10 +255,14 @@ def main():
                 dc = dd.load(psfname=psf, **ddict)
                 pmodel, nmodel = dc.source_selection()
 
-        pmodel.save( prefix+".lsm.html")
-        nmodel.save( prefix+"_negative.lsm.html")
+            pmodel.save( prefix+".lsm.html")
+            nmodel.save( prefix+"_negative.lsm.html")
+            utils.xrun("tigger-convert", ["--rename -f", prefix + ".lsm.html"])
         
     else:
+    
+        if not args.image:
+            raise SystemExit("sourcery: no image provided. System Exiting. Use sourcery -h for help.")
         images = args.image.split(",")
         psfs = args.psf.split(",") if args.psf else [None]
 
@@ -290,22 +293,23 @@ def main():
                      args.do_beam, savemask_neg=args.savemask_neg,
                      savemask_pos=args.savemask_pos,
                      no_smooth=args.disable_smoothing, **pybdsm_opts)
+            try: 
+                # assignign reliability values
+                pmodel, nmodel, step = mc.get_reliability()
 
-            # assignign reliability values
-            pmodel, nmodel, step = mc.get_reliability()
-
-            # direction dependent detection tagging
+                # direction dependent detection tagging
             
-            dc = dd.load(imagename=image, psfname=psf, pmodel=pmodel, nmodel=nmodel,
-                    local_step=step, snr_thresh=args.snr_thresh,
-                    high_corr_thresh=args.psfcorr_thresh, negdetec_region=
-                    args.neg_region, negatives_thresh=args.num_negatives,
-                    phasecenter_excl_radius=args.phase_center_rm, prefix=prefix,
-                    loglevel=args.log_level)
-            # tagging
-            pmodel, nmodel = dc.source_selection()
-            pmodel.save( prefix+".lsm.html")
-            nmodel.save( prefix+"_negative.lsm.html")
-            utils.xrun("tigger-convert", ["--rename -f", prefix + ".lsm.html"])
-
+                dc = dd.load(imagename=image, psfname=psf, pmodel=pmodel, nmodel=nmodel,
+                        local_step=step, snr_thresh=args.snr_thresh,
+                        high_corr_thresh=args.psfcorr_thresh, negdetec_region=
+                        args.neg_region, negatives_thresh=args.num_negatives,
+                        phasecenter_excl_radius=args.phase_center_rm, prefix=prefix,
+                        loglevel=args.log_level)
+                # tagging
+                pmodel, nmodel = dc.source_selection()
+                pmodel.save( prefix+".lsm.html")
+                nmodel.save( prefix+"_negative.lsm.html")
+                utils.xrun("tigger-convert", ["--rename -f", prefix + ".lsm.html"])
+            except:
+                pass
             #TODO: delete any file that is not needed
