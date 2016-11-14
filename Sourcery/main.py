@@ -1,16 +1,15 @@
-# Reliability estimation and direction-dependent source selection
-## Lerato Sebokolodi <mll.sebokolodi@gmail.com>
+# Lerato Sebokolodi <mll.sebokolodi@gmail.com>
 
 import sys
 from argparse import ArgumentParser
-import reliabilityestimates as rel
-import direcdepen as dd
-import os
-import datetime
-import json
+import source_finding
 import utils
-
-
+import compute_reliability
+import os
+import simplejson as json
+import smooth_mask
+import Tigger
+import tempfile
 
 
 # set sourcery directory
@@ -22,294 +21,272 @@ execfile("%s/__init__.py"%_path)
 def main():
 
     for i, arg in enumerate(sys.argv):
-        if (arg[0] == '-') and arg[1].isdigit(): sys.argv[i] = ' ' + arg
+        if (arg[0] == '') and arg[1].isdigit(): sys.argv[i] = '' + arg
 
-    parser = ArgumentParser(description="Reliability estimator and"
-                           " direction-dependent sources selection tool."
-                           " M. L. L Sebokolodi <mll.sebokolodi@gmail.com>")
-
+    parser = ArgumentParser(description="Computes Reliablities and Tags Sources that require"
+                           " Direction-Dependent correction")
     add = parser.add_argument
-    add("-v","--version", action="version",version=
+
+    add("-v", "--version", action="version", version=
         "{:s} version {:s}".format(parser.prog, __version__))
-   
-    add("-i", "--image", dest="image",
-        help=" FITS image name")
 
-    add("-p", "--psfimage", dest="psf", default=None,
-        help=" Point Spread Function (PSF) Fits image name. Default = None")
+    add("-i", "--image", dest="image", help="Fits image to extract sources from.",
+        type=str, default=None)
 
-    add("-ds", "--disable-smoothing", dest="disable_smoothing", action="store_true", 
-        help=" Smooth data before running source finder.")
+    add("-p", "--psf-image", dest="psf_image", default=None, type=str)
 
-    add("-s", "--source-finder", dest="source_finder", default="pybdsm",
-        help=" Source finder name. Default='pybdsm'.")
-    add("-catype", "--catalog-format", dest="catalogue_format", default="gaul",
-        help=" Type of a catalogue. Gaussian cataog is 'gaul', source list is 'srl'")
+    add("-pc", "--pos-catalog", dest="positive_catalog", default=None, type=str,
+        help=" Takes in a model of detections obtained from the positive image. "
+             "Current format supported: Tigger'.lsm.html'")
 
-    add("--to-pybdsm", dest="to_pybdsm", action="append",
-           help=" PyBDSM process_image option. E.g 'thresh_pix=1,thresh_pix=2'")
+    add("-nc", "--neg-catalog", dest="negative_catalog", default=None, type=str,
+        help=" Model containing detections from the negative pixels (in Tigger format)")
 
-    add("-log", "--log-level",dest="log_level", type=int, default=0,
-        help=" Python logging module, where info=0, debug=1, critial=2 and abort=3.")
-
-    add("-od", "--output-dir", dest="outdir", default=None, 
-        help=" Output products will be dumped here. System Default will be generated.")
-
-    add("-pref", "-dir-prefix", dest="prefix", default=None, 
+    add("-pref", "-dir-prefix", dest="prefix", default=None,
         help=" Prefix for output products. System default will be generated.")
 
-    add("-apsf", "--add-psfcorr", dest="add_psfcorr", action="store_true",
-        default=False, help=" Adds PSF correlation for density estimations. The PSF "
-        " image must be provided. Default is False. To set True add -apsf")
+    add("-od", "--output-dir", dest="outdir", default=None,
+        help=" Output products will be dumped here. System Default will be generated.")
 
-    add("-alv", "--add-localvar", dest="add_locvar", action="store_true",
-        default=False, help=" Include local variance for density estimations. See -apsf.")
+    add("-adl", "--do-local", dest="add_localvar", action="store_true",
+        default=False, help="Include local variance for reliability estimations."
+                            "Default is False")
 
-    add("-dn", "--do-nearsources", dest="do_nearsources", action="store_true",
-        default=False, help=" Adds number of neighbours for density estimations. See -apsf")
+    add("-apsf", "--do-psf", dest="add_psf_corr", action="store_true",
+        default=False, help="Add PSF correlation for reliability estimations."
+                            "Default is False")
 
-    add("-dmp", "--do-relplots", dest="do_relplots", action="store_false",
-        default=True, help=" Make reliability density plot. Default is True."
-        " To disable add -dmp on the command line.")
- 
-    add("-drel", "--reset-rel", dest="reset_rel", action="store_true",
-        default=False, help=" Assigns R=0 for sources with cf < 0.002 and" 
-        "R > 0.60.")
+    add("-ans", "--do-nearby-sources", dest="add_near", action="store_true",
+        default=False, help="Add number of nearby sources as a feature. Default is False.")
 
-    add("-beam", "--beam-cluster", dest="do_beam", default=False,
-        action="store_true", help= " Increases the Gaussian groupings by 20 percent the"
-        " beam size. Default is False.")
- 
-    add("-pcr", "--psfcorr-region",  dest="psfcorr_region", type=int,
-        default=5, help=" The size of the region to correlate, in beam sizes."
-        " Default value is 5 beam sizes.")
-  
     add("-lr", "--local-region", dest="local_region", default=10,
-        help=" The area to compute the local variance, in beam sizes."
-        " Default value is 10 beam sizes.")
-     
-    add("-rel_rm", "--rel-rmsrc", dest="rel_rmsrc", 
-        action="append", default=None, help=" Delete sources within a radius;"
-        " e.g ra, dec, radius (in degrees). For more than"
-        " one region: ra1,dec1,radius1:ra2,dec2,radius2. Default is None.")
+        help="The size of image pixels to compute the local variance. E.g"
+             " if 5 is given, then the region of 5 * PSF sizes  centred about"
+             " a source will be used.  Default is 10.")
 
-    add("-ps", "--positive-smooth", dest="pos_smooth", type=float, default=2.0, 
-        help=" Masking threshold in the positive image, e.g pixels 2x noise"
-        " will be masked. Default is 2.0.")
+    add("-pr", "--psf-region", dest="psf_region", default=5,
+        help= "The size of the image pixels to correlate with the PSF, see -lr."
+              " Default is 5.")
 
-    add("-ns", "--negative-smooth", dest="neg_smooth", type=float, default=2.0, 
-        help=" Similar to -ps. Applied to negative image.")
+    add("-nr", "--nearby-region", dest="nearby_region", default=10,
+        help="The region to look up for source, see -lr. Default is 10.")
 
-    add('-pisl', "--thresh-isl", dest="thresh_isl", type=float, default=3,
-        help=" Source finding threshold for forming islands. For positive image."
-         " Default is 3.")
+    add("-drp", "--do-rel-plots", dest="do_rel_plots", default=True,
+        help="Make reliability plots. Default is True.", action="store_false")
 
-    add("-ppix", "--thresh-pix", dest="thresh_pix", type=float, default=5,
-        help=" Source finding threshold for model fitting. For positive image."
-        " Default is 5.")
- 
-    add("-nisl", "--negthreshold-isl", dest="neg_thresh_isl",
-        type=float, default=3, help=" Similar to -pisl but applied"
-        " to the negative image. Default is 3.")
+    add("-dg", "--diag-cov", dest="use_diag_cov", default=False, action="store_true",
+        help="If specified, a diagonal covariance matrix will be used to estimate the density"
+             " functions.")
 
-    add("-npix", "--negthreshold-pix", dest="neg_thresh_pix",
-        type=float, default=5, help=" Similar to -ppix but applied"
-        " for negative image. Default is 5.")
+    add("--to-pybdsm", dest="to_pybdsm", action="append",
+           help=" PyBDSM process_image option, e.g. thresh_pix=1,thresh_pix=2")
 
-    add("-snr_thr", "--snr-threshold", dest="snr_thresh", type=float,
-        default=40, help=" SNR threshold. High SNR Sources have SNR > 40x min(SNR)"
-        " Default is 40.")
+    add("-cat", "--catalog-type", dest="catalog_type", default="gaul",
+           help="A catalog type (pybdsm module), e.g gaul, srl"
+                " which corresponds to Gaussian and Source components. This option"
+                " is available if source finding is performed within the program. Default"
+                " is gaul.")
 
-    add("-pc_thr", "--psfcorr-threshold", dest="psfcorr_thresh", 
-        type=float, default=0.5, help="Correlation factor (CF) threshold."
-        "High CF sources have CF > 0.5. Default is 0.5.")    
+    add("-fm", "--catalog-format" ,dest="catalog_format", default="ascii",
+           help="Format to save your catalog. The available options are "
+                "ascii (default) and fits.")
 
-    add("-nneg", "--num-negatives",dest="num_negatives", type=float, default=4,
-        help="Number of neigbouring (NN) negative detections. Default is 4."
-        "High NN sources have NN > 4.")
+    add("-sn", "--save-neg-image", dest="save_negative_image", default=True,
+        help="Save the inverted image. Default is True.", action="store_false")
 
-    add("-nrgn", "--neg-region", dest="neg_region", type=float, default=10,
-        help="The size of a region to find -nneg. Default is 10.") 
+    add("-smt", "--smooth-mask", dest="smooth_mask", default=False,
+        help=" Smooth the image using Gaussian kernels at different scales."
+             " Then mask the pixels a factor c below the noise."
+             " Default is False.", action="store_true")
 
-    add("-phrm", "--phasecenter-remove", dest="phase_center_rm",
-        type=float, default=None, help="The radius excluded from"
-        " direction-dependent source selection. NB: this radius is w.r.t to"
-        " the phase center. Default is None.")
+    add("-mf", "--mask-thresh", dest="mask_thresh", default=2.0,
+        help="This will mask all pixels in the smoothed image below "
+             "this factor above the noise. Default is 2.")
 
     add('-jc', '--json-config', dest='config', default=None,
         help='Json config file : No default')
-    
-    add("-smp", "--save-posmask", dest="savemask_pos", action="store_true",
-        default=False, help="If specified, positive mask is saved.")
-    
-    add("-smn", "--save-negmask", dest="savemask_neg", action="store_true",
-        default=False, help=" If specified, the negative mask is saved.")
 
-
-    args = parser.parse_args() 
-    to_pybdsm = args.to_pybdsm[0].split(",") if args.to_pybdsm else None
-    pybdsm_opts = dict([ items.split("=") for items in to_pybdsm ] ) \
-                       if to_pybdsm else {}
-    
-    for key, val in pybdsm_opts.iteritems():
-        if not callable(val):
-            try:
-                pybdsm_opts[key] = eval(key)
-            except NameError:
-                pybdsm_opts[key] = val
-	      
-
-    # making outdirectory
-    def get_prefix(prefix, imagename, outdir):
-        if prefix is None:
-            prefix = os.path.basename(imagename.split(",")[0]).split(".")[:-1]
-            prefix = ".".join(prefix)
-
-        outdir = outdir or prefix +"_"+ os.path.join(datetime.datetime.now().\
-                                           strftime("%Y-%m-%d-%H"))
-        outdir = os.path.abspath(outdir)
-        if not os.path.exists(outdir): 
-            os.makedirs(outdir)
-        prefix = outdir +"/"+ prefix
-        return prefix
-    
+    args = parser.parse_args()
+    if args.smooth_mask:
+        smooth_fits = tempfile.NamedTemporaryFile(suffix="." + "fits", dir=".")
+        smooth_fits.flush()
     if args.config:
-        keys = []
-        images = args.image.split(",") if args.image else None
         with open(args.config) as conf:
             jdict = json.load(conf)
             for key, val in jdict.items():
                 if isinstance(val, unicode):
                     jdict[key] = str(val)
-        
-        prefix = get_prefix(jdict["prefix"],
-                    images[0] if images else jdict["imagename"],
-                    jdict["outdir"])
+        # reading in the different dictionaries in the config file
+        reliability_dict = jdict["reliability"]
+        dde_tagging_dict = jdict["dd_tagging"]
+        source_finding_dict = jdict["source_finder_opts"]
 
-        reldict = jdict["reliability"]
-        ddict = jdict["dd_tagging"]
-        sourcefin = jdict["source_finder_opts"]
-        
-        for key, val in reldict.iteritems():
-            if isinstance(val, unicode):
-                reldict[key] = str(val)
-        
-        for key, val in ddict.iteritems():
-            if isinstance(val, unicode):
-                ddict[key] = str(val)
-        reldict.update(sourcefin)
-        enable = ddict["enable"]
-        ddict.pop("enable")
+        outdir = jdict["outdir"] or args.outdir
+        cat_type = jdict["catalog_type"] or args.catalog_type
+        cat_format = jdict["catalog_format"] or args.catalog_format
+        prefix = jdict["prefix"] or args.prefix
+        positive_catalog = jdict["positive_catalog"] or args.positive_catalog
+        negative_catalog = jdict["negative_catalog"] or args.negative_catalog
+        images  = jdict["image"] or args.image
+        psf_images = jdict["psf_image"] or args.psf_image
 
-        if args.image:
-            psfs = args.psf.split(",") if args.psf else [None]
-        
+        if positive_catalog and negative_catalog:
+            image = images.split(",")[0]
+            psf_image = psf_images.split(",")[0] if psf_images else [None]
+            prefix = utils.get_prefix(prefix, positive_catalog, outdir)
+            pmodel = Tigger.load(positive_catalog)
+            nmodel = Tigger.load(negative_catalog)
+            reliability_dict["plot_prefix"] = prefix
+            load_reliability = compute_reliability.load(
+                positive_model=pmodel, negative_model=nmodel, image=image,
+                psf_image=psf_image, **reliability_dict)
+            positive_model, negative_model = load_reliability.get_reliability()
+            positive_model.save(prefix + ".lsm.html")
+            negative_model.save(prefix + "_negative.lsm.html")
+            utils.info("Sourcery Completed successfully!!!")
+
+        elif images:
+            images = images.split(",")
+            psfs = psf_images.split() if psf_images else [None]
+            prefix = utils.get_prefix(prefix, images[0], outdir)
+            if len(images) != len(psfs):
+                psfs = [psfs[0]]*len(images)
+            if args.smooth_mask or jdict["smooth_mask"]:
+                smooth_fits = tempfile.NamedTemporaryFile(suffix="." + "fits", dir=".")
+                smooth_fits.flush()
+            for i, (image, psf) in enumerate(zip(images, psfs)):
+                if len(images) > 1:
+                    prefix = prefix + "-%04d"%i
+                reliability_dict["plot_prefix"]  = prefix
+                ext = ext = utils.file_ext(images[0])
+                output = prefix + "." + cat_type
+
+                if args.smooth_mask or jdict["smooth_mask"]:
+                    noise = utils.average_negative_noise(image)[0]
+                    smooth_mask.smooth_and_mask(image, smooth_fits.name,
+                                                thresh=args.mask_thresh,
+                                                noise=noise)
+                    source_finding_dict["blank_limit"] = 1e-9
+                    source_finding_dict["detection_image"] = smooth_fits.name
+                positive_catalog = source_finding.find_sources(
+                    image, output=output, catalog_type=cat_type,
+                format=cat_format, **source_finding_dict)
+                negative_image = utils.make_inverted_image(
+                    image, prefix, ext=ext, save=args.save_negative_image)
+                source_finding_dict['thresh_isl'] = int(source_finding_dict['thresh_isl']) - 1 if \
+                    source_finding_dict.get('thresh_isl') else 2
+                source_finding_dict['thresh_pix'] = int(source_finding_dict['thresh_pix']) - 1 \
+                    if source_finding_dict.get('thresh_pix') else 4
+                if args.smooth_mask or jdict["smooth_mask"]:
+                    smooth_mask.smooth_and_mask(negative_image, smooth_fits.name,
+                                                thresh=args.mask_thresh, noise=noise)
+                    source_finding_dict["detection_image"] = smooth_fits.name
+                negative_catalog = source_finding.find_sources(
+                    negative_image, output.replace(
+                        "."+cat_type, "_negative."+cat_type), **source_finding_dict)
+                pmodel = Tigger.load(positive_catalog)
+                nmodel = Tigger.load(negative_catalog)
+                load_reliability = compute_reliability.load(
+                    positive_model=pmodel, negative_model=nmodel,
+                    image=image, psf_image=psf, **reliability_dict)
+                positive_model, negative_model = load_reliability.get_reliability()
+                positive_model.save(prefix + ".lsm.html")
+                negative_model.save(prefix + "_negative.lsm.html")
+            if args.smooth_mask or jdict["smooth_mask"]:
+                smooth_fits.close()
+        else:
+            utils.abort("No images or models provided on the terminal or config file. Exiting.")
+
+    else:
+        # taking the pybdsm options from the command line.
+        to_pybdsm = args.to_pybdsm[0].split(",") if args.to_pybdsm else None
+        pybdsm_opts = dict([items.split("=") for items in to_pybdsm]) \
+            if to_pybdsm else {}
+        cat_type = args.catalog_type  # gaul, srl
+        cat_format = args.catalog_format  # ascii, fits
+        # checking the entries of pybdsm_opts
+        for key, val in pybdsm_opts.iteritems():
+            if not callable(val):
+                try:
+                    pybdsm_opts[key] = eval(key)
+                except NameError:
+                    pybdsm_opts[key] = val
+
+        if args.positive_catalog and args.negative_catalog:
+            utils.info("Using models %s and %s for the reliablity estimation " %
+                       (args.positive_catalog, args.negative_catalog))
+            prefix = utils.get_prefix(args.prefix, args.positive_catalog, args.outdir)
+            pmodel = Tigger.load(args.positive_catalog)
+            nmodel = Tigger.load(args.negative_catalog)
+            load_reliability = compute_reliability.load(
+                positive_model=pmodel, negative_model=nmodel, image=args.image,
+                psf_image=args.psf_image, do_local_variance=args.add_localvar,
+                do_psf_correlation=args.add_psf_corr, do_nearby_sources=args.add_near,
+                local_var_step=args.local_region, correlation_step=args.psf_region,
+                nearby_step=args.nearby_region, do_reliability_plots=args.do_rel_plots,
+                do_diag_cov=args.use_diag_cov, plot_prefix=prefix)
+            positive_model, negative_model = load_reliability.get_reliability()
+            positive_model.save(prefix + ".lsm.html")
+            negative_model.save(prefix + "_negative.lsm.html")
+            utils.info("Sourcery Completed successfully!!!")
+        elif args.image:
+            images = args.image.split(",")
+            psfs = args.psf_image.split(",") if args.psf_image else [None]
+            ext = utils.file_ext(images[0])
             if len(images) != len(psfs):
                 psfs = [psfs[0]]*len(images)
 
+            utils.info("Running Source Finding on the image(s) provided. ")
             for i, (image, psf) in enumerate(zip(images, psfs)):
-                prefix = get_prefix(jdict["prefix"],
-                         images[0] if images else jdict["imagename"],
-                         jdict["outdir"])
-                if len(images) >1:
+                prefix = utils.get_prefix(args.prefix, images[0], args.outdir)
+                if len(images) > 1:
                     prefix = prefix + "-%04d"%i
-
-                reldict["prefix"]  = prefix
-                mc = rel.load(image, psf, **reldict)
-                try:
-                    pmodel, nmodel, step = mc.get_reliability()
-
-                    reldict["prefix"] = prefix
-                    ddict["pmodel"] = pmodel
-                    ddict["nmodel"] = nmodel
-                    ddict["prefix"] = prefix
-                    ddict["imagename"] = image
-                    ddict["local_step"] = step
-
-                    if enable:
-                        dc = dd.load( psfname=psf, **ddict)
-                        pmodel, nmodel  = dc.source_selection()
-                    pmodel.save( prefix+".lsm.html")
-                    nmodel.save( prefix+"_negative.lsm.html")
-                    utils.xrun("tigger-convert", ["--rename -f", prefix + ".lsm.html"])
-                except:
-                    pass
-        
+                output = prefix + "." + cat_type
+                if args.smooth_mask:
+                    noise = utils.average_negative_noise(image)[0]
+                    smooth_mask.smooth_and_mask(image, smooth_fits.name,
+                                                thresh=args.mask_thresh, noise=noise)
+                    pybdsm_opts["detection_image"] = smooth_fits.name
+                    pybdsm_opts["blank_limit"] = 1e-9
+                positive_catalog = source_finding.find_sources(
+                    image, output=output, catalog_type=cat_type,
+                    format=cat_format, **pybdsm_opts)
+                negative_image = utils.make_inverted_image(image, prefix, ext=ext,
+                                                 save=args.save_negative_image)
+                pybdsm_opts['thresh_isl'] = int(pybdsm_opts['thresh_isl']) - 1 if\
+                    pybdsm_opts.get('thresh_isl') else 2
+                pybdsm_opts['thresh_pix'] = int(pybdsm_opts['thresh_pix']) - 1 \
+                    if pybdsm_opts.get('thresh_pix') else 4
+                if args.smooth_mask:
+                    smooth_mask.smooth_and_mask(negative_image, smooth_fits.name,
+                                                thresh=args.smooth_mask, noise=noise)
+                    pybdsm_opts["detection_image"] = smooth_fits.name
+                negative_catalog = source_finding.find_sources(
+                    negative_image, output=output.replace("." + cat_type, "_negative."+cat_type),
+                    catalog_type=cat_type, format=cat_format, **pybdsm_opts)
+                pmodel = Tigger.load(positive_catalog)
+                nmodel = Tigger.load(negative_catalog)
+                load_reliability = compute_reliability.load(
+                            positive_model=pmodel, negative_model=nmodel, image=image,
+                            psf_image=psf, do_local_variance=args.add_localvar,
+                            do_psf_correlation=args.add_psf_corr, do_nearby_sources=args.add_near,
+                            local_var_step=args.local_region, correlation_step=args.psf_region,
+                            nearby_step=args.nearby_region, do_reliability_plots=args.do_rel_plots,
+                            do_diag_cov=args.use_diag_cov, plot_prefix=prefix)
+                positive_model, negative_model = load_reliability.get_reliability()
+                positive_model.save(prefix + ".lsm.html")
+                negative_model.save(prefix + "_negative.lsm.html")
+                utils.info("Sourcery Completed successfully!!!")
+            if args.smooth_mask:
+                smooth_fits.close()
         else:
-
-            image = jdict["imagename"]
-            psf = jdict["psfname"]
-
-            reldict["prefix"]  = prefix 
-            mc = rel.load(image, psf, **reldict)
-            pmodel, nmodel, step = mc.get_reliability()
-            
-            ddict["pmodel"] = pmodel
-            ddict["nmodel"] = nmodel
-            ddict["prefix"] = prefix
-            ddict["imagename"]  = image
-            ddict["local_step"] = step
-            
-
-            if enable:
-                dc = dd.load(psfname=psf, **ddict)
-                pmodel, nmodel = dc.source_selection()
-
-            pmodel.save( prefix+".lsm.html")
-            nmodel.save( prefix+"_negative.lsm.html")
-            utils.xrun("tigger-convert", ["--rename -f", prefix + ".lsm.html"])
-        
-    else:
-    
-        if not args.image:
-            raise SystemExit("sourcery: no image provided. System Exiting. Use sourcery -h for help.")
-        images = args.image.split(",")
-        psfs = args.psf.split(",") if args.psf else [None]
+            utils.abort("No image or models provided. Aborting. See help command.")
 
 
-        psfregion = args.psfcorr_region
-        locregion = args.local_region
 
-        if len(images) != len(psfs):
-            psfs = [psfs[0]]*len(images)
 
-        for i, (image, psf) in enumerate(zip(images, psfs)):
-            prefix = get_prefix(args.prefix, images[0], args.outdir)
 
-            if len(images) >1:
-                prefix = prefix + "-%04d"%i
 
-            mc  = rel.load(imagename=image, psfname=psf, sourcefinder_name=
-                     args.source_finder, makeplots=args.do_relplots,
-					 saveformat=args.catalogue_format, do_psf_corr=args.add_psfcorr,
-					 do_local_var=args.add_locvar,
-                     psf_corr_region=psfregion, local_var_region=locregion, 
-                     rel_excl_src=args.rel_rmsrc, pos_smooth=args.pos_smooth,
-                     neg_smooth=args.neg_smooth, loglevel=args.log_level, 
-                     thresh_isl=args.thresh_isl, thresh_pix=args.thresh_pix,
-                     neg_thresh_isl=args.neg_thresh_isl, neg_thresh_pix=
-                     args.neg_thresh_pix, prefix=prefix, reset_rel=args.reset_rel, 
-                     do_nearsources=args.do_nearsources, increase_beam_cluster=
-                     args.do_beam, savemask_neg=args.savemask_neg,
-                     savemask_pos=args.savemask_pos,
-                     no_smooth=args.disable_smoothing, **pybdsm_opts)
-            try: 
-                # assignign reliability values
-                pmodel, nmodel, step = mc.get_reliability()
 
-                # direction dependent detection tagging
-            
-                dc = dd.load(imagename=image, psfname=psf, pmodel=pmodel, nmodel=nmodel,
-                        local_step=step, snr_thresh=args.snr_thresh,
-                        high_corr_thresh=args.psfcorr_thresh, negdetec_region=
-                        args.neg_region, negatives_thresh=args.num_negatives,
-                        phasecenter_excl_radius=args.phase_center_rm, prefix=prefix,
-                        loglevel=args.log_level)
-                # tagging
-                pmodel, nmodel = dc.source_selection()
-                pmodel.save( prefix+".lsm.html")
-                nmodel.save( prefix+"_negative.lsm.html")
-                utils.xrun("tigger-convert", ["--rename -f", prefix + ".lsm.html"])
-            except:
-                pass
-            #TODO: delete any file that is not needed
+
+
