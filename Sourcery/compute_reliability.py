@@ -72,6 +72,8 @@ class load(object):
                 self.beam_major = self.image_header["bmaj"]
                 self.beam_minor = self.image_header["bmin"]
                 self.wcs = WCS(self.image_header, mode="pyfits")
+                beam_pix = int((self.beam_major)/float(abs(self.image_header["cdelt1"])))
+                self.psf_step = self.psf_step * beam_pix
             if self.psf_image:
                 with pyfits.open(self.psf_image) as psf:
                     self.psf_data = utils.slice_image_data(psf[0].data)
@@ -104,7 +106,7 @@ class load(object):
         out = numpy.zeros([nsrc, len(labels)])
         if self.do_corr:
             c0 = abs(self.psf_header["crpix2"])
-            psf_region = self.psf_data[abs(c0-self.psf_step):c0+self.psf_step,
+            psf_region = self.psf_data[abs(c0-self.psf_step):c0 + self.psf_step,
                          abs(c0-self.psf_step): c0 + self.psf_step].flatten()
 
         area, peak, total, local, corr, near = [], [], [], [], [], []
@@ -136,13 +138,12 @@ class load(object):
                 source_local = abs(local_data_region[local_data_region < 0]).std()
                 local.append(source_local)
                 src.setAttribute("local_variance", source_local)
-
             if self.do_corr:
                 data_region = imagedata[abs(pix_dec - self.psf_step): pix_dec + self.psf_step,
-                              abs(pix_ra - self.psf_step): pix_ra +self.psf_step].flatten()
-                normalise_data = (data_region - data_region.min())/(data_region.max() -
+                              abs(pix_ra - self.psf_step): pix_ra + self.psf_step].flatten()
+                normalised_data = (data_region - data_region.min())/(data_region.max() -
                                                                     data_region.min())
-                correlation = numpy.corrcoef((normalise_data, psf_region))
+                correlation = numpy.corrcoef((normalised_data, psf_region))
                 corr_factor = ((numpy.diag((numpy.rot90(correlation))**2).sum())**0.5)/2**0.5
                 corr.append(corr_factor)
                 src.setAttribute("correlation_factor", corr_factor)
@@ -238,12 +239,11 @@ class load(object):
         if self.do_local or self.do_corr:
             loc, cor = map(lambda a: (a * self.beam_major)/float(abs(self.image_header["cdelt1"])),
                            [self.local_step, self.psf_step])
-            step = max([loc, cor])
-            self.positive_model = utils.remove_sources_edges(
+            step = 2 *  max([loc, cor])
+            self.positive_model= utils.remove_sources_edges(
                 self.positive_model, hdr=self.image_header, step=step)
             self.negative_model = utils.remove_sources_edges(
                    self.negative_model, hdr=self.image_header, step=step)
-
         pmodel, positive, labels = self.parameters(self.positive_model, self.image_data)
         negative_pixels = -1 * self.image_data if self.image_data is not None else None
         nmodel, negative, labels = self.parameters(self.negative_model, negative_pixels)
