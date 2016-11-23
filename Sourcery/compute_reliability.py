@@ -194,19 +194,24 @@ class load(object):
             cov[0, 1] = covariance[i, j]
             cov[1, 0] = covariance[j, i]
             cov[1, 1] = covariance[j, j]
-
             ncov = KernelDensityEstimate(numpy.array([a, b]), cov)
+            pcov = KernelDensityEstimate(numpy.array([c, d]), cov)
+            
             pn = ncov(numpy.array([a, b])) * nneg
+            pp = pcov(numpy.array([c, d])) * npos
             ac = numpy.concatenate((a, c))
             bd = numpy.concatenate((b, d))
             xi = numpy.linspace(ac.min(), ac.max(), 100)
             yi = numpy.linspace(bd.min(), bd.max(), 100)
-            zzz = griddata((a,b), values=pn,
+            zzz = griddata((a, b), values=pn,
                            xi=(xi[None, :], yi[:, None]),
                            method='cubic')
-
+            ppp = griddata((c, d), values=pp,
+                           xi=(xi[None, :], yi[:, None]),
+                           method='cubic')
             pylab.contour(xi, yi, zzz, 10, linewidths=2, colors='r')
-            pylab.scatter(positive[:, i], positive[:, j], marker='o', c='k')
+            pylab.contour(xi, yi, ppp, 10, linewidths=2, colors='b')
+            pylab.scatter(c, d, marker='o', c='k')
             pylab.tick_params(axis='x')
             pylab.tick_params(axis='y')
             pylab.xlabel(labels[x][1])
@@ -301,29 +306,6 @@ class load(object):
 
         return self.positive_model, self.negative_model
     # save the tags outside
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
